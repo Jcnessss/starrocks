@@ -100,6 +100,14 @@ private:
     int64_t _scale_to_nano_factor = 0;
 };
 
+class NullConverter final : public ColumnConverter {
+public:
+    NullConverter() = default;
+    ~NullConverter() override = default;
+
+    Status convert(const ColumnPtr& src, Column* dst) override;
+};
+
 template <typename SourceType, typename DestType>
 void convert_int_to_int(SourceType* __restrict__ src, DestType* __restrict__ dst, size_t size) {
     for (size_t i = 0; i < size; i++) {
@@ -518,9 +526,7 @@ Status ColumnConverterFactory::create_converter(const ParquetField& field, const
     }
 
     if (need_convert && *converter == nullptr) {
-        return Status::NotSupported(
-                strings::Substitute("parquet column reader: not supported convert from parquet `$0` to `$1`",
-                                    ::tparquet::to_string(parquet_type), type_to_string(col_type)));
+        *converter = std::make_unique<NullConverter>();
     }
 
     if (!need_convert) {
@@ -762,6 +768,16 @@ Status Int64ToTimeConverter::convert(const ColumnPtr& src, Column* dst) {
         }
     }
     dst_nullable_column->set_has_null(src_nullable_column->has_null());
+    return Status::OK();
+}
+
+Status NullConverter::convert(const starrocks::ColumnPtr& src, starrocks::Column* dst) {
+    auto* src_nullable_column = ColumnHelper::as_raw_column<NullableColumn>(src);
+    // hive only support null column
+    // TODO: support not null
+    auto* dst_nullable_column = down_cast<NullableColumn*>(dst);
+    dst_nullable_column->append_nulls(src_nullable_column->size());
+    dst_nullable_column->set_has_null(true);
     return Status::OK();
 }
 
