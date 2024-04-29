@@ -146,6 +146,7 @@ public:
     }
 
     DEFINE_VECTORIZED_FN(concat);
+    DEFINE_VECTORIZED_FN(flatten);
 
     DEFINE_VECTORIZED_FN(array_cum_sum_bigint);
     DEFINE_VECTORIZED_FN(array_cum_sum_double);

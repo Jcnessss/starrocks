@@ -1205,6 +1205,26 @@ StatusOr<ColumnPtr> ArrayFunctions::concat(FunctionContext* ctx, const Columns& 
     }
 }
 
+StatusOr<ColumnPtr> ArrayFunctions::flatten(FunctionContext* ctx, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    auto* super_array_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(columns[0].get()));
+    auto& super_offset_column = super_array_column->offsets_column();
+
+    auto* child_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(super_array_column->elements_column().get()));
+    auto& child_offset_column = child_column->offsets_column();
+
+    auto result_offset_column = UInt32Column::create();
+    auto& offsets_vec = result_offset_column->get_data();
+    offsets_vec.push_back(0);
+
+    for (int i = 1; i < super_array_column->offsets_column()->size(); i++) {
+        offsets_vec.push_back(child_offset_column->get_data()[super_offset_column->get_data()[i]]);
+    }
+
+    return ArrayColumn::create(child_column->elements_column(), result_offset_column);
+}
+
 template <bool with_length>
 void _array_slice_item(ArrayColumn* column, size_t index, ArrayColumn* dest_column, int64_t offset, int64_t length) {
     auto& dest_offsets = dest_column->offsets_column()->get_data();
