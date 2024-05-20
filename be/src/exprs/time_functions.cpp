@@ -271,6 +271,7 @@ StatusOr<ColumnPtr> TimeFunctions::convert_tz(FunctionContext* context, const Co
     return convert_tz_const(context, columns, ctc->from_tz, ctc->to_tz);
 }
 
+
 StatusOr<ColumnPtr> TimeFunctions::utc_timestamp(FunctionContext* context, const Columns& columns) {
     starrocks::RuntimeState* state = context->state();
     DateTimeValue dtv;
@@ -521,6 +522,13 @@ DEFINE_UNARY_FN_WITH_IMPL(time_to_secImpl, v) {
 }
 DEFINE_TIME_UNARY_FN(time_to_sec, TYPE_TIME, TYPE_BIGINT);
 
+DEFINE_UNARY_FN_WITH_IMPL(ta_to_date_intImpl, v) {
+    DateTimeValue dtv;
+    dtv.from_unixtime(v / 1000000, "+00:00");
+    return dtv.year() * 10000 + dtv.month() * 100 + dtv.day();
+}
+DEFINE_TIME_UNARY_FN(ta_to_date_int, TYPE_BIGINT, TYPE_INT);
+
 // month_name
 DEFINE_UNARY_FN_WITH_IMPL(month_nameImpl, v) {
     return ((DateValue)v).month_name();
@@ -543,6 +551,7 @@ DEFINE_UNARY_FN_WITH_IMPL(day_of_yearImpl, v) {
     return day.julian() - first_day_year.julian() + 1;
 }
 DEFINE_TIME_UNARY_FN(day_of_year, TYPE_DATETIME, TYPE_INT);
+
 
 // week_of_year
 DEFINE_UNARY_FN_WITH_IMPL(week_of_yearImpl, v) {
@@ -1837,6 +1846,24 @@ Status TimeFunctions::str_to_date_prepare(FunctionContext* context, FunctionCont
     return Status::OK();
 }
 
+Status TimeFunctions::ta_parse_date_int_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope) {
+    if (scope != FunctionContext::FRAGMENT_LOCAL) {
+        return Status::OK();
+    }
+
+    Slice slice("%Y-%m-%d");
+
+    // start point to the first unspace char in string format.
+    char* start;
+    if (is_date_format(slice, &start)) {
+        auto* fc = new StrToDateCtx();
+        fc->fmt_type = yyyycMMcdd;
+        fc->fmt = start;
+        context->set_function_state(scope, fc);
+    }
+    return Status::OK();
+}
+
 // try to transfer content to date format based on "%Y-%m-%d",
 // if successful, return result TimestampValue
 // else take a uncommon approach to process this content.
@@ -1861,6 +1888,33 @@ StatusOr<ColumnPtr> TimeFunctions::str_to_date_from_date_format(FunctionContext*
                 result.append(ts);
             } else {
                 const Slice& fmt = fmt_viewer.value(i);
+                str_to_date_internal(&ts, fmt, str, &result);
+            }
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+template <bool isYYYYMMDD>
+StatusOr<ColumnPtr> TimeFunctions::str_to_date_from_const_date_format(FunctionContext* context,
+                                                                const starrocks::Columns& columns,
+                                                                const char* str_format) {
+    size_t size = columns[0]->size();
+    ColumnBuilder<TYPE_DATETIME> result(size);
+
+    TimestampValue ts;
+    auto str_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    Slice fmt("%Y-%m-%d");
+    for (size_t i = 0; i < size; ++i) {
+        if (str_viewer.is_null(i)) {
+            result.append_null();
+        } else {
+            const Slice& str = str_viewer.value(i);
+            bool r = isYYYYMMDD ? ts.from_date_format_str(str.get_data(), str.get_size(), str_format)
+                                : ts.from_datetime_format_str(str.get_data(), str.get_size(), str_format);
+            if (r) {
+                result.append(ts);
+            } else {
                 str_to_date_internal(&ts, fmt, str, &result);
             }
         }
@@ -2002,6 +2056,73 @@ DEFINE_UNARY_FN_WITH_IMPL(TimestampToDate, value) {
 StatusOr<ColumnPtr> TimeFunctions::str2date(FunctionContext* context, const Columns& columns) {
     ASSIGN_OR_RETURN(ColumnPtr datetime, str_to_date(context, columns));
     return VectorizedStrictUnaryFunction<TimestampToDate>::evaluate<TYPE_DATETIME, TYPE_DATE>(datetime);
+}
+
+DEFINE_UNARY_FN_WITH_IMPL(TimestampToInt, value) {
+    return value.to_timestamp_literal() / 1000000;
+}
+
+StatusOr<ColumnPtr> TimeFunctions::ta_parse_date_int(FunctionContext* context, const Columns& columns) {
+    auto* ctx = reinterpret_cast<StrToDateCtx*>(context->get_function_state(FunctionContext::FRAGMENT_LOCAL));
+    ASSIGN_OR_RETURN(ColumnPtr datetime, str_to_date_from_const_date_format<true>(context, columns, ctx->fmt));
+    return VectorizedStrictUnaryFunction<TimestampToInt>::evaluate<TYPE_DATETIME, TYPE_INT>(datetime);
+}
+
+DEFINE_UNARY_FN_WITH_IMPL(TimestampToMilli, value) {
+    return value.to_unix_microsecond() / 1000;
+}
+
+StatusOr<ColumnPtr> TimeFunctions::ta_to_epoch_milli(FunctionContext* context, const Columns& columns) {
+    starrocks::RuntimeState* state = context->state();
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    size_t size = columns[0]->size(); // minimum number of rows.
+    ColumnBuilder<TYPE_BIGINT> result(size);
+
+    auto bt_viewer = ColumnViewer<TYPE_BIGINT>(columns[0]);
+    for (size_t i = 0; i < size; ++i) {
+        if (bt_viewer.is_null(i)) {
+            result.append_null();
+        } else {
+            const auto& value = bt_viewer.value(i);
+            int64_t offset;
+            LOG(INFO) << value;
+            LOG(INFO) << state->timezone_obj().name();
+            LOG(INFO) << cctz::utc_time_zone().name();
+            if (TimezoneUtils::timezone_offsets(state->timezone_obj().name(), "UTC" , &offset)) {
+                LOG(INFO) << offset;
+                result.append(value/ 1000 + offset * 1000);
+                continue;
+            } else {
+                result.append_null();
+            }
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::ta_to_date_int1(FunctionContext* context, const Columns& columns) {
+    LOG(INFO) << "ee";
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    size_t size = columns[0]->size(); // minimum number of rows.
+    ColumnBuilder<TYPE_INT> result(size);
+
+    auto bt_viewer = ColumnViewer<TYPE_BIGINT>(columns[0]);
+    for (size_t i = 0; i < size; ++i) {
+        if (bt_viewer.is_null(i)) {
+            result.append_null();
+        } else {
+            const auto& value = bt_viewer.value(i);
+            DateTimeValue dtv;
+            LOG(INFO) << value;
+            int32_t v = value / 1000000;
+            LOG(INFO) << v;
+            dtv.from_unixtime(value / 1000000, "+00:00");
+            result.append(dtv.year() * 10000 + dtv.month() * 100 + dtv.day());
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
 }
 
 Status TimeFunctions::format_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope) {
@@ -2577,6 +2698,87 @@ Status TimeFunctions::datetime_trunc_prepare(FunctionContext* context, FunctionC
     return Status::OK();
 }
 
+Status TimeFunctions::ta_datetime_trunc_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope) {
+    if (scope != FunctionContext::FRAGMENT_LOCAL) {
+        return Status::OK();
+    }
+
+    if (!context->is_notnull_constant_column(0)) {
+        return Status::InternalError("datetime_trunc just support const format value");
+    }
+
+    ColumnPtr column = context->get_constant_column(0);
+    Slice slice = ColumnHelper::get_const_value<TYPE_VARCHAR>(column);
+    auto format_value = slice.to_string();
+
+    column = context->get_constant_column(2);
+    int32_t weekday = ColumnHelper::get_const_value<TYPE_INT>(column);
+
+    // to lower case
+    std::transform(format_value.begin(), format_value.end(), format_value.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    ScalarFunction function;
+    if (format_value == "microsecond") {
+        function = &TimeFunctions::datetime_trunc_microsecond;
+    } else if (format_value == "millisecond") {
+        function = &TimeFunctions::datetime_trunc_millisecond;
+    } else if (format_value == "second") {
+        function = &TimeFunctions::datetime_trunc_second;
+    } else if (format_value == "minute") {
+        function = &TimeFunctions::datetime_trunc_minute;
+    } else if (format_value == "minute5") {
+        function = &TimeFunctions::datetime_trunc_minute5;
+    } else if (format_value == "minute10") {
+        function = &TimeFunctions::datetime_trunc_minute10;
+    } else if (format_value == "hour") {
+        function = &TimeFunctions::datetime_trunc_hour;
+    } else if (format_value == "day") {
+        function = &TimeFunctions::datetime_trunc_day;
+    } else if (format_value == "month") {
+        function = &TimeFunctions::datetime_trunc_month;
+    } else if (format_value == "year") {
+        function = &TimeFunctions::datetime_trunc_year;
+    } else if (format_value == "week") {
+        switch (weekday) {
+        case 1:
+            function = &TimeFunctions::datetime_trunc_week;
+            break;
+        case 2:
+            function = &TimeFunctions::datetime_trunc_week_tuesday;
+            break;
+        case 3:
+            function = &TimeFunctions::datetime_trunc_week_wednesday;
+            break;
+        case 4:
+            function = &TimeFunctions::datetime_trunc_week_thursday;
+            break;
+        case 5:
+            function = &TimeFunctions::datetime_trunc_week_friday;
+            break;
+        case 6:
+            function = &TimeFunctions::datetime_trunc_week_saturday;
+            break;
+        case 7:
+            function = &TimeFunctions::datetime_trunc_week_sunday;
+            break;
+        default:
+            function = &TimeFunctions::datetime_trunc_week;
+        }
+    } else if (format_value == "quarter") {
+        function = &TimeFunctions::datetime_trunc_quarter;
+    } else {
+        return Status::InternalError(
+                "format value must in {microsecond, millisecond, second, minute, hour, day, month, year, week, "
+                "quarter}");
+    }
+
+    auto fc = new DateTruncCtx();
+    fc->function = function;
+    context->set_function_state(scope, fc);
+    return Status::OK();
+}
+
 DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_microsecondImpl, v) {
     return v;
 }
@@ -2602,6 +2804,20 @@ DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_minuteImpl, v) {
     return result;
 }
 DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_minute, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_minute5Impl, v) {
+    TimestampValue result = v;
+    result.trunc_to_minute(5);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_minute5, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_minute10Impl, v) {
+    TimestampValue result = v;
+    result.trunc_to_minute(10);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_minute10, TYPE_DATETIME, TYPE_DATETIME, 1);
 
 DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_hourImpl, v) {
     TimestampValue result = v;
@@ -2639,6 +2855,54 @@ DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_weekImpl, v) {
 }
 DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week, TYPE_DATETIME, TYPE_DATETIME, 1);
 
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_tuesdayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(3 > day_of_week ? 3 - day_of_week - 7 : 3 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_tuesday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_wednesdayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(4 > day_of_week ? 4 - day_of_week - 7 : 4 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_wednesday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_thursdayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(5 > day_of_week ? 5 - day_of_week - 7 : 5 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_thursday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_fridayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(6 > day_of_week ? 6 - day_of_week - 7 : 6 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_friday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_saturdayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(7 > day_of_week ? 7 - day_of_week - 7 : 7 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_saturday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
+DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_week_sundayImpl, v) {
+    int day_of_week = ((DateValue)v).weekday() + 1;
+    TimestampValue result = v;
+    result.trunc_to_week(1 > day_of_week ? 1 - day_of_week - 7 : 1 - day_of_week);
+    return result;
+}
+DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_week_sunday, TYPE_DATETIME, TYPE_DATETIME, 1);
+
 DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_quarterImpl, v) {
     TimestampValue result = v;
     result.trunc_to_quarter();
@@ -2647,6 +2911,11 @@ DEFINE_UNARY_FN_WITH_IMPL(datetime_trunc_quarterImpl, v) {
 DEFINE_TIME_UNARY_FN_EXTEND(datetime_trunc_quarter, TYPE_DATETIME, TYPE_DATETIME, 1);
 
 StatusOr<ColumnPtr> TimeFunctions::datetime_trunc(FunctionContext* context, const Columns& columns) {
+    auto ctc = reinterpret_cast<DateTruncCtx*>(context->get_function_state(FunctionContext::FRAGMENT_LOCAL));
+    return ctc->function(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::ta_datetime_trunc(FunctionContext* context, const Columns& columns) {
     auto ctc = reinterpret_cast<DateTruncCtx*>(context->get_function_state(FunctionContext::FRAGMENT_LOCAL));
     return ctc->function(context, columns);
 }

@@ -246,11 +246,19 @@ public:
     DEFINE_VECTORIZED_FN(datetime_trunc_millisecond);
     DEFINE_VECTORIZED_FN(datetime_trunc_second);
     DEFINE_VECTORIZED_FN(datetime_trunc_minute);
+    DEFINE_VECTORIZED_FN(datetime_trunc_minute5);
+    DEFINE_VECTORIZED_FN(datetime_trunc_minute10);
     DEFINE_VECTORIZED_FN(datetime_trunc_hour);
     DEFINE_VECTORIZED_FN(datetime_trunc_day);
     DEFINE_VECTORIZED_FN(datetime_trunc_month);
     DEFINE_VECTORIZED_FN(datetime_trunc_year);
     DEFINE_VECTORIZED_FN(datetime_trunc_week);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_tuesday);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_wednesday);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_thursday);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_friday);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_saturday);
+    DEFINE_VECTORIZED_FN(datetime_trunc_week_sunday);
     DEFINE_VECTORIZED_FN(datetime_trunc_quarter);
     /**
      * Get truncated time
@@ -259,10 +267,11 @@ public:
      */
     // datetime_trunc for sql.
     DEFINE_VECTORIZED_FN(datetime_trunc);
+    DEFINE_VECTORIZED_FN(ta_datetime_trunc);
 
     static Status datetime_trunc_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
     static Status datetime_trunc_close(FunctionContext* context, FunctionContext::FunctionStateScope scope);
-
+    static Status ta_datetime_trunc_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
     /*
      * Called by time_slice
      * Floor to the corresponding period
@@ -343,6 +352,7 @@ public:
     static Status convert_tz_close(FunctionContext* context, FunctionContext::FunctionStateScope scope);
 
     DEFINE_VECTORIZED_FN(convert_tz);
+    DEFINE_VECTORIZED_FN(ta_to_epoch_milli);
 
     DEFINE_VECTORIZED_FN(utc_timestamp);
 
@@ -587,6 +597,10 @@ public:
     static StatusOr<ColumnPtr> str_to_date_from_date_format(FunctionContext* context, const starrocks::Columns& columns,
                                                             const char* str_format);
 
+    template <bool isYYYYMMDD>
+    static StatusOr<ColumnPtr> str_to_date_from_const_date_format(FunctionContext* context, const starrocks::Columns& columns,
+                                                            const char* str_format);
+
     // Try to process string content, based on uncommon string format
     static StatusOr<ColumnPtr> str_to_date_uncommon(FunctionContext* context, const starrocks::Columns& columns);
 
@@ -598,6 +612,9 @@ public:
      * @return  TimestampColumn
      */
     DEFINE_VECTORIZED_FN(str_to_date);
+    DEFINE_VECTORIZED_FN(ta_parse_date_int);
+    DEFINE_VECTORIZED_FN(ta_to_date_int);
+    DEFINE_VECTORIZED_FN(ta_to_date_int1);
 
     /**
      *
@@ -618,6 +635,7 @@ public:
 
     static Status str_to_date_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
     static Status str_to_date_close(FunctionContext* context, FunctionContext::FunctionStateScope scope);
+    static Status ta_parse_date_int_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
 
     static Status format_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
 

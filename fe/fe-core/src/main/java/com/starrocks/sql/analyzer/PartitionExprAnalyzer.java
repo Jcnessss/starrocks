@@ -33,7 +33,8 @@ public class PartitionExprAnalyzer {
      */
     public static void analyzeDateTruncFunction(FunctionCallExpr funcCall, SlotRef partitionSlotRef) {
         String functionName = funcCall.getFnName().getFunction();
-        if (functionName.equalsIgnoreCase(FunctionSet.DATE_TRUNC)) {
+        if (functionName.equalsIgnoreCase(FunctionSet.DATE_TRUNC) ||
+                functionName.equalsIgnoreCase(FunctionSet.TA_DATE_TRUNC)) {
             Expr arg1 = funcCall.getParams().exprs().get(1);
             if (arg1 instanceof SlotRef) {
                 Type targetColType = partitionSlotRef.getType();
@@ -66,7 +67,8 @@ public class PartitionExprAnalyzer {
             Function builtinFunction = null;
             Type targetColType = partitionSlotRef.getType();
             String functionName = functionCallExpr.getFnName().getFunction();
-            if (functionName.equalsIgnoreCase(FunctionSet.DATE_TRUNC)) {
+            if (functionName.equalsIgnoreCase(FunctionSet.DATE_TRUNC) ||
+                    functionName.equalsIgnoreCase(FunctionSet.TA_DATE_TRUNC)) {
                 analyzeDateTruncFunction(functionCallExpr, partitionSlotRef);
                 builtinFunction = functionCallExpr.getFn();
                 targetColType = functionCallExpr.getType();

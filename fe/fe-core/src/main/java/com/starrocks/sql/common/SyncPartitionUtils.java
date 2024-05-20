@@ -122,7 +122,8 @@ public class SyncPartitionUtils {
                                                                  RangePartitionDiffer differ) {
         PrimitiveType partitionColumnType = functionCallExpr.getType().getPrimitiveType();
         Map<String, Range<PartitionKey>> rollupRange = Maps.newHashMap();
-        if (functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.DATE_TRUNC)) {
+        if (functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.DATE_TRUNC) ||
+                functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.TA_DATE_TRUNC)) {
             String granularity = ((StringLiteral) functionCallExpr.getChild(0)).getValue().toLowerCase();
             rollupRange = toMappingRanges(baseRangeMap, granularity, partitionColumnType);
         } else if (functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STR2DATE)) {

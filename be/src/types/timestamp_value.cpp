@@ -793,6 +793,12 @@ void TimestampValue::trunc_to_minute() {
     _timestamp -= microseconds;
 }
 
+void TimestampValue::trunc_to_minute(int minutes) {
+    Timestamp time = _timestamp & TIMESTAMP_BITS_TIME;
+    uint64_t microseconds = time % (USECS_PER_MINUTE * minutes);
+    _timestamp -= microseconds;
+}
+
 void TimestampValue::trunc_to_hour() {
     Timestamp time = _timestamp & TIMESTAMP_BITS_TIME;
     uint64_t microseconds = time % USECS_PER_HOUR;
@@ -832,6 +838,14 @@ int64_t TimestampValue::to_unix_second() const {
     result *= SECS_PER_DAY;
     result += timestamp::to_time(_timestamp) / USECS_PER_SEC;
     result -= timestamp::UNIX_EPOCH_SECONDS;
+    return result;
+}
+
+int64_t TimestampValue::to_unix_microsecond() const {
+    int64_t result = timestamp::to_julian(_timestamp);
+    result *= USECS_PER_DAY;
+    result += timestamp::to_time(_timestamp);
+    result -= timestamp::UNIX_EPOCH_SECONDS * USECS_PER_SEC;
     return result;
 }
 

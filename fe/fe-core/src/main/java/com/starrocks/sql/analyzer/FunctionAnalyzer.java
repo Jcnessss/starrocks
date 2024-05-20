@@ -47,7 +47,7 @@ public class FunctionAnalyzer {
         }
 
         FunctionName fnName = functionCallExpr.getFnName();
-        if (fnName.getFunction().equals(FunctionSet.DATE_TRUNC)) {
+        if (fnName.getFunction().equals(FunctionSet.DATE_TRUNC) || fnName.getFunction().equals(FunctionSet.TA_DATE_TRUNC)) {
             if (!(functionCallExpr.getChild(0) instanceof StringLiteral)) {
                 throw new SemanticException("date_trunc requires first parameter must be a string constant",
                         functionCallExpr.getChild(0).getPos());
@@ -60,7 +60,8 @@ public class FunctionAnalyzer {
 
             if (functionCallExpr.getChild(1).getType().isDatetime()) {
 
-                if (!Lists.newArrayList("year", "quarter", "month", "week", "day", "hour", "minute", "second")
+                if (!Lists.newArrayList("year", "quarter", "month", "week", "day", "hour", "minute", "second",
+                                "minute5", "minute10")
                         .contains(lowerParam)) {
                     throw new SemanticException("date_trunc function can't support argument other than " +
                             "year|quarter|month|week|day|hour|minute|second", functionCallExpr.getChild(0).getPos());

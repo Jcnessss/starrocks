@@ -442,7 +442,8 @@ public class OptOlapPartitionPruner {
                 FunctionCallExpr functionCallExpr = (FunctionCallExpr) partitionExpr.get(0);
                 String functionName = functionCallExpr.getFnName().getFunction();
                 return (FunctionSet.DATE_TRUNC.equalsIgnoreCase(functionName)
-                        || FunctionSet.TIME_SLICE.equalsIgnoreCase(functionName))
+                        || FunctionSet.TIME_SLICE.equalsIgnoreCase(functionName)
+                        || FunctionSet.TA_DATE_TRUNC.equalsIgnoreCase(functionName))
                         && !exprPartitionInfo.getIdToRange(true).containsKey(candidatePartitions.get(0));
             } else if (partitionExpr.size() == 1 && partitionExpr.get(0) instanceof SlotRef) {
                 return !exprPartitionInfo.getIdToRange(true).containsKey(candidatePartitions.get(0));

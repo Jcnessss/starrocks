@@ -485,6 +485,8 @@ vectorized_functions = [
      'TimeFunctions::str_to_date_prepare', 'TimeFunctions::str_to_date_close'],
     [50243, 'str2date', True, False, 'DATE', ['VARCHAR', 'VARCHAR'], 'TimeFunctions::str2date',
      'TimeFunctions::str_to_date_prepare', 'TimeFunctions::str_to_date_close'],
+    [50248, 'ta_to_date_int', 'INT', ['BIGINT'], 'TimeFunctions::ta_to_date_int'],
+    [50249, 'ta_parse_date_int', 'INT', ['VARCHAR'], 'TimeFunctions::ta_parse_date_int',  'TimeFunctions::ta_parse_date_int_prepare', 'TimeFunctions::str_to_date_close'],
 
     # Joda Time parse & format
     [50244, 'str_to_jodatime', True, False, 'DATETIME', ['VARCHAR', 'VARCHAR'],
@@ -526,6 +528,7 @@ vectorized_functions = [
     [50311, 'monthname', True, False, 'VARCHAR', ['DATETIME'], 'TimeFunctions::month_name'],
     [50320, 'convert_tz', True, False, 'DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR'], 'TimeFunctions::convert_tz',
      'TimeFunctions::convert_tz_prepare', 'TimeFunctions::convert_tz_close'],
+    [50329, 'ta_to_epoch_milli', 'BIGINT', ['BIGINT'], 'TimeFunctions::ta_to_epoch_milli'],
     [50330, 'utc_timestamp', True, False, 'DATETIME', [], 'TimeFunctions::utc_timestamp'],
     [50331, 'utc_time', True, False, 'TIME', [], 'TimeFunctions::utc_time'],
     [50340, 'date_trunc', True, False, 'DATETIME', ['VARCHAR', 'DATETIME'], 'TimeFunctions::datetime_trunc',
@@ -541,6 +544,8 @@ vectorized_functions = [
      'TimeFunctions::time_slice_prepare', 'TimeFunctions::time_slice_close'],
     [50373, 'time_slice', True, False, 'DATETIME', ['DATETIME', 'INT', 'VARCHAR', 'VARCHAR'],
      'TimeFunctions::time_slice', 'TimeFunctions::time_slice_prepare', 'TimeFunctions::time_slice_close'],
+    [50380, 'ta_date_trunc', 'DATETIME', ['VARCHAR', 'DATETIME', 'INT'], 'TimeFunctions::ta_datetime_trunc',
+     'TimeFunctions::ta_datetime_trunc_prepare', 'TimeFunctions::datetime_trunc_close'],
     [50400, 'next_day', True, False, 'DATE', ['DATETIME', 'VARCHAR'], 'TimeFunctions::next_day',
      'TimeFunctions::next_day_prepare', 'TimeFunctions::next_day_close'],
     [50401, 'previous_day', True, False, 'DATE', ['DATETIME', 'VARCHAR'], 'TimeFunctions::previous_day',

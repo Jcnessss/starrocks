@@ -846,7 +846,8 @@ public class PartitionUtil {
         } else if (partitionExpr instanceof FunctionCallExpr) {
             FunctionCallExpr functionCallExpr = (FunctionCallExpr) partitionExpr;
             if (functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.DATE_TRUNC) ||
-                    functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STR2DATE)) {
+                    functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STR2DATE ||
+                    functionCallExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.TA_DATE_TRUNC)) {
                 return SyncPartitionUtils.getRangePartitionDiffOfExpr(basePartitionMap,
                         mvPartitionMap, functionCallExpr, differ);
             } else {

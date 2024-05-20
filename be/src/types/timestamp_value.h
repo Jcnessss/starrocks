@@ -89,6 +89,7 @@ public:
     void trunc_to_millisecond();
     void trunc_to_second();
     void trunc_to_minute();
+    void trunc_to_minute(int minutes);
     void trunc_to_hour();
     void trunc_to_day();
     void trunc_to_month();
@@ -120,6 +121,7 @@ public:
     bool from_string(const char* date_str, size_t len);
 
     int64_t to_unix_second() const;
+    int64_t to_unix_microsecond() const;
 
     bool from_unixtime(int64_t second, const std::string& timezone);
     void from_unixtime(int64_t second, const cctz::time_zone& ctz);

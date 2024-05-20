@@ -1313,9 +1313,9 @@ public class AnalyzerUtils {
         }
         FunctionCallExpr functionCallExpr = (FunctionCallExpr) expr;
         String fnName = functionCallExpr.getFnName().getFunction();
-        if (fnName.equals(FunctionSet.DATE_TRUNC)) {
+        if (fnName.equals(FunctionSet.DATE_TRUNC) || fnName.equals(FunctionSet.TA_DATE_TRUNC)) {
             List<Expr> paramsExprs = functionCallExpr.getParams().exprs();
-            if (paramsExprs.size() != 2) {
+            if (fnName.equals(FunctionSet.DATE_TRUNC) && paramsExprs.size() != 2) {
                 throw new AnalysisException("date_trunc params exprs size should be 2.");
             }
             Expr granularityExpr = paramsExprs.get(0);
@@ -1671,7 +1671,8 @@ public class AnalyzerUtils {
             return;
         }
         String functionName = functionCallExpr.getFnName().getFunction();
-        if (FunctionSet.DATE_TRUNC.equalsIgnoreCase(functionName)) {
+        if (FunctionSet.DATE_TRUNC.equalsIgnoreCase(functionName) ||
+                FunctionSet.TA_DATE_TRUNC.equalsIgnoreCase(functionName) {
             Expr expr = functionCallExpr.getParams().exprs().get(0);
             String functionGranularity = ((StringLiteral) expr).getStringValue();
             if (!prePartitionGranularity.equalsIgnoreCase(functionGranularity)) {
@@ -1701,8 +1702,8 @@ public class AnalyzerUtils {
         NodePosition pos = expr.getPos();
         List<String> columnList = Lists.newArrayList();
         List<Expr> paramsExpr = expr.getParams().exprs();
-        if (FunctionSet.DATE_TRUNC.equals(functionName)) {
-            if (paramsExpr.size() != 2) {
+        if (FunctionSet.DATE_TRUNC.equals(functionName) || FunctionSet.TA_DATE_TRUNC.equals(functionName)) {
+            if (FunctionSet.DATE_TRUNC.equals(functionName) && paramsExpr.size() != 2) {
                 throw new ParsingException(PARSER_ERROR_MSG.unsupportedExprWithInfo(expr.toSql(), "PARTITION BY"), pos);
             }
             Expr firstExpr = paramsExpr.get(0);
