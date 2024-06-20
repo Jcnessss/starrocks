@@ -227,4 +227,173 @@ StatusOr<ColumnPtr> StringFunctions::split(FunctionContext* context, const starr
     }
 }
 
+StatusOr<ColumnPtr> StringFunctions::split_limit(FunctionContext* context, const starrocks::Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer string_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    ColumnViewer delimiter_viewer = ColumnViewer<TYPE_VARCHAR>(columns[1]);
+    auto limit = ColumnHelper::get_const_value<TYPE_INT>(context->get_constant_column(2));
+
+    size_t row_nums = columns[0]->size();
+
+    //Array Offset
+    int offset = 0;
+    UInt32Column::Ptr array_offsets = UInt32Column::create();
+    array_offsets->reserve(row_nums + 1);
+
+    //Array Binary
+    auto* haystack_columns = down_cast<BinaryColumn*>(ColumnHelper::get_data_column(columns[0].get()));
+    BinaryColumn::Ptr array_binary_column = BinaryColumn::create();
+
+    auto state = reinterpret_cast<SplitState*>(context->get_function_state(FunctionContext::FRAGMENT_LOCAL));
+    if (context->is_notnull_constant_column(0) && context->is_notnull_constant_column(1)) {
+        std::vector<std::string> split_string = state->const_split_strings;
+        array_binary_column->reserve(row_nums * split_string.size(), haystack_columns->get_bytes().size());
+
+        int32_t result_size = std::min(static_cast<int>(split_string.size()), limit);
+        LOG(INFO) << result_size;
+        for (int row = 0; row < row_nums; ++row) {
+            array_offsets->append(offset);
+            LOG(INFO) << offset;
+            std::string final = "";
+            for (int i = 0; i < split_string.size(); i++) {
+                if (i >= limit - 1) {
+                    final += split_string[i];
+                    if (i == split_string.size() - 1) {
+                        array_binary_column->append(Slice(final.c_str()));
+                        LOG(INFO) << final;
+                    }
+                } else {
+                    array_binary_column->append(Slice(split_string[i].c_str()));
+                }
+            }
+            offset += result_size;
+        }
+        LOG(INFO) << offset;
+        array_offsets->append(offset);
+
+        return ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),
+                                   array_offsets);
+    } else if (columns[1]->is_constant()) {
+        Slice delimiter = state->delimiter;
+
+        if (delimiter.size == 0) { // split each character
+            std::vector<Slice> v;
+            v.reserve(haystack_columns->byte_size());
+            array_binary_column->reserve(haystack_columns->byte_size(), haystack_columns->get_bytes().size());
+
+            for (int row = 0; row < row_nums; ++row) {
+                array_offsets->append(offset);
+                Slice haystack = string_viewer.value(row);
+
+                for (int h = 0; h < haystack.size;) {
+                    auto char_size = UTF8_BYTE_LENGTH_TABLE[static_cast<unsigned char>(haystack.data[h])];
+                    if (h >= (limit - 1) * char_size) {
+                        v.emplace_back(Slice(haystack.data + h, (haystack.size - limit + 1) * char_size));
+                        offset++;
+                        break;
+                    } else {
+                        v.emplace_back(Slice(haystack.data + h, char_size));
+                        h += char_size;
+                        offset++;
+                    }
+                }
+            }
+            array_offsets->append(offset);
+
+            array_binary_column->append_continuous_strings(v);
+        } else {
+            //row_nums * 5 is an estimated value, because the true value cannot be obtained for the time being here
+            array_binary_column->reserve(row_nums * 5, haystack_columns->get_bytes().size());
+            for (int row = 0; row < row_nums; ++row) {
+                array_offsets->append(offset);
+                Slice haystack = string_viewer.value(row);
+                int32_t haystack_offset = 0;
+                int splits_size = 0;
+
+                while (true) {
+                    splits_size++;
+                    const char* pos = reinterpret_cast<const char*>(
+                            state->find_delimiter(haystack.data + haystack_offset, haystack.size - haystack_offset,
+                                                  delimiter.data, delimiter.size));
+                    if (pos != nullptr && splits_size < limit - 1) {
+                        array_binary_column->append(
+                                Slice(haystack.data + haystack_offset, pos - (haystack.data + haystack_offset)));
+                        haystack_offset = pos - haystack.data + delimiter.size;
+                    } else {
+                        array_binary_column->append(
+                                Slice(haystack.data + haystack_offset, haystack.size - haystack_offset));
+                        break;
+                    }
+                }
+                offset += splits_size;
+            }
+            array_offsets->append(offset);
+        }
+        if (!columns[0]->has_null()) {
+            return ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),
+                                       array_offsets);
+        } else {
+            return NullableColumn::create(
+                    ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),
+                                        array_offsets),
+                    NullColumn::create(*ColumnHelper::as_raw_column<NullableColumn>(columns[0])->null_column()));
+        }
+    } else {
+        array_binary_column->reserve(row_nums * 5, haystack_columns->get_bytes().size() * sizeof(uint8_t));
+
+        auto result_array = ArrayColumn::create(NullableColumn::create(BinaryColumn::create(), NullColumn::create()),
+                                                UInt32Column::create());
+        NullColumnPtr null_array = NullColumn::create();
+        for (int row = 0; row < row_nums; ++row) {
+            array_offsets->append(offset);
+
+            if (string_viewer.is_null(row) || delimiter_viewer.is_null(row)) {
+                null_array->append(1);
+                continue;
+            }
+            null_array->append(0);
+
+            Slice str = string_viewer.value(row);
+            Slice delimiter = delimiter_viewer.value(row);
+            if (delimiter.size == 0) { // split each character
+                for (auto h = 0; h < str.size;) {
+                    auto char_size = UTF8_BYTE_LENGTH_TABLE[static_cast<unsigned char>(str.data[h])];
+                    if (h >= (limit - 1) * char_size) {
+                        array_binary_column->append(Slice(str.data + h, (str.size - limit + 1) * char_size));
+                        offset++;
+                        break;
+                    } else {
+                        array_binary_column->append(Slice(str.data + h, char_size));
+                        h += char_size;
+                        offset++;
+                    }
+                }
+            } else {
+                std::vector<std::string> split_string =
+                        strings::Split(StringPiece(str.get_data(), str.get_size()),
+                                       StringPiece(delimiter.get_data(), delimiter.get_size()));
+                int32_t result_size = std::min(static_cast<int>(split_string.size()), limit);
+                std::string final = "";
+                for (int i = 0; i < split_string.size(); i++) {
+                    if (i >= limit - 1) {
+                        final += split_string[i];
+                        if (i == split_string.size() - 1) {
+                            array_binary_column->append(Slice(final.c_str()));
+                        }
+                    } else {
+                        array_binary_column->append(Slice(split_string[i].c_str()));
+                    }
+                }
+                offset += result_size;
+            }
+        }
+        array_offsets->append(offset);
+        result_array = ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),
+                                           array_offsets);
+        return NullableColumn::create(result_array, null_array);
+    }
+}
+
 } // namespace starrocks

@@ -339,6 +339,7 @@ public:
      * @return: ArrayColumn
      */
     DEFINE_VECTORIZED_FN(split);
+    DEFINE_VECTORIZED_FN(split_limit);
 
     static Status split_prepare(FunctionContext* context, FunctionContext::FunctionStateScope scope);
     static Status split_close(FunctionContext* context, FunctionContext::FunctionStateScope scope);

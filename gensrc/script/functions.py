@@ -320,10 +320,9 @@ vectorized_functions = [
     [30261, 'concat_ws', True, True, 'VARCHAR', ['VARCHAR', 'ARRAY_VARCHAR'], 'ArrayFunctions::array_concat_ws'],
     [30270, 'find_in_set', True, False, 'INT', ['VARCHAR', 'VARCHAR'], 'StringFunctions::find_in_set'],
     [30310, 'split_part', True, True, 'VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::split_part'],
-    [30311, 'split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::split',
-     'StringFunctions::split_prepare', 'StringFunctions::split_close'],
-    [30312, 'substring_index', True, False, 'VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'],
-     'StringFunctions::substring_index'],
+    [30311, 'split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::split', 'StringFunctions::split_prepare', 'StringFunctions::split_close'],
+    [303110, 'split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::split_limit', 'StringFunctions::split_prepare', 'StringFunctions::split_close'],
+    [30312, 'substring_index', True, False, 'VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::substring_index'],
     # v1 is deprecated
     [30316, 'str_to_map', True, False, 'MAP_VARCHAR_VARCHAR', ['ARRAY_VARCHAR', 'VARCHAR'],
      'StringFunctions::str_to_map_v1'],
@@ -485,8 +484,8 @@ vectorized_functions = [
      'TimeFunctions::str_to_date_prepare', 'TimeFunctions::str_to_date_close'],
     [50243, 'str2date', True, False, 'DATE', ['VARCHAR', 'VARCHAR'], 'TimeFunctions::str2date',
      'TimeFunctions::str_to_date_prepare', 'TimeFunctions::str_to_date_close'],
-    [50248, 'ta_to_date_int', 'INT', ['BIGINT'], 'TimeFunctions::ta_to_date_int'],
-    [50249, 'ta_parse_date_int', 'INT', ['VARCHAR'], 'TimeFunctions::ta_parse_date_int',  'TimeFunctions::ta_parse_date_int_prepare', 'TimeFunctions::str_to_date_close'],
+    [50248, 'ta_to_date_int', True, False, 'INT', ['BIGINT'], 'TimeFunctions::ta_to_date_int'],
+    [50249, 'ta_parse_date_int', True, False, 'INT', ['VARCHAR'], 'TimeFunctions::ta_parse_date_int',  'TimeFunctions::ta_parse_date_int_prepare', 'TimeFunctions::str_to_date_close'],
 
     # Joda Time parse & format
     [50244, 'str_to_jodatime', True, False, 'DATETIME', ['VARCHAR', 'VARCHAR'],
@@ -528,7 +527,7 @@ vectorized_functions = [
     [50311, 'monthname', True, False, 'VARCHAR', ['DATETIME'], 'TimeFunctions::month_name'],
     [50320, 'convert_tz', True, False, 'DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR'], 'TimeFunctions::convert_tz',
      'TimeFunctions::convert_tz_prepare', 'TimeFunctions::convert_tz_close'],
-    [50329, 'ta_to_epoch_milli', 'BIGINT', ['BIGINT'], 'TimeFunctions::ta_to_epoch_milli'],
+    [50329, 'ta_to_epoch_milli', True, False, 'BIGINT', ['BIGINT'], 'TimeFunctions::ta_to_epoch_milli'],
     [50330, 'utc_timestamp', True, False, 'DATETIME', [], 'TimeFunctions::utc_timestamp'],
     [50331, 'utc_time', True, False, 'TIME', [], 'TimeFunctions::utc_time'],
     [50340, 'date_trunc', True, False, 'DATETIME', ['VARCHAR', 'DATETIME'], 'TimeFunctions::datetime_trunc',
@@ -544,7 +543,7 @@ vectorized_functions = [
      'TimeFunctions::time_slice_prepare', 'TimeFunctions::time_slice_close'],
     [50373, 'time_slice', True, False, 'DATETIME', ['DATETIME', 'INT', 'VARCHAR', 'VARCHAR'],
      'TimeFunctions::time_slice', 'TimeFunctions::time_slice_prepare', 'TimeFunctions::time_slice_close'],
-    [50380, 'ta_date_trunc', 'DATETIME', ['VARCHAR', 'DATETIME', 'INT'], 'TimeFunctions::ta_datetime_trunc',
+    [50380, 'ta_date_trunc', True, False, 'DATETIME', ['VARCHAR', 'DATETIME', 'INT'], 'TimeFunctions::ta_datetime_trunc',
      'TimeFunctions::ta_datetime_trunc_prepare', 'TimeFunctions::datetime_trunc_close'],
     [50400, 'next_day', True, False, 'DATE', ['DATETIME', 'VARCHAR'], 'TimeFunctions::next_day',
      'TimeFunctions::next_day_prepare', 'TimeFunctions::next_day_close'],
@@ -1304,7 +1303,7 @@ vectorized_functions = [
 
     # high-order functions related to lambda functions.
     [160100, 'array_map', True, False, 'ANY_ARRAY', ['FUNCTION', 'ANY_ARRAY', "..."], 'ArrayFunctions::array_map'],
-
+    [160101, 'zip', True, False, 'ANY_ARRAY', ['ANY_ARRAY', "..."],'ArrayFunctions::zip'],
     # map functions
     [170000, 'map_size', True, False, 'INT', ['ANY_MAP'], 'MapFunctions::map_size'],
     [170001, 'map_keys', True, False, 'ANY_ARRAY', ['ANY_MAP'], 'MapFunctions::map_keys'],
