@@ -187,7 +187,7 @@ bool init_glog(const char* basename, bool install_signal_handler) {
     // 0 means buffer INFO only.
     FLAGS_logbuflevel = 0;
     // Buffer log messages for at most this many seconds.
-    FLAGS_logbufsecs = 30;
+    FLAGS_logbufsecs = 0;
     // Set roll num.
     FLAGS_log_filenum_quota = config::sys_log_roll_num;
 
