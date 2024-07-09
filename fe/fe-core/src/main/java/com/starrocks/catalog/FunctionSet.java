@@ -1066,6 +1066,10 @@ public class FunctionSet {
                     Lists.newArrayList(t), Type.BIGINT, Type.VARBINARY,
                     true, false, true));
 
+            addBuiltin(AggregateFunction.createBuiltin(APPROX_COUNT_DISTINCT,
+                    Lists.newArrayList(t, Type.DOUBLE), Type.BIGINT, Type.VARBINARY,
+                    true, false, true));
+
             // HLL_RAW
             addBuiltin(AggregateFunction.createBuiltin(HLL_RAW,
                     Lists.newArrayList(t), Type.HLL, Type.VARBINARY,
