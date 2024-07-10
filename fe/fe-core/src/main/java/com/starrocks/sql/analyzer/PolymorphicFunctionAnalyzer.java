@@ -65,6 +65,7 @@ public class PolymorphicFunctionAnalyzer {
         newFn.setHasVarArgs(fn.hasVarArgs());
         newFn.setId(fn.getId());
         newFn.setUserVisible(fn.isUserVisible());
+        newFn.setisAnalyticFn(fn.isAnalyticFn());
         return newFn;
     }
 
