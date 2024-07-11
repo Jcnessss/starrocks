@@ -21,7 +21,7 @@ constexpr int HLL_COLUMN_PRECISION = 14;
 constexpr int HLL_ZERO_COUNT_BITS = (64 - HLL_COLUMN_PRECISION);
 constexpr int HLL_EXPLICLIT_INT64_NUM = 160;
 constexpr int HLL_SPARSE_THRESHOLD = 4096;
-constexpr int HLL_REGISTERS_COUNT = 16 * 1024;
+constexpr int HLL_REGISTERS_COUNT = 64 * 1024;
 // maximum size in byte of serialized HLL: type(1) + registers (2^14)
 constexpr int HLL_COLUMN_DEFAULT_LEN = HLL_REGISTERS_COUNT + 1;
 
