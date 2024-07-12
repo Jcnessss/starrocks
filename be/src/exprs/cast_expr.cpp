@@ -216,14 +216,59 @@ static ColumnPtr cast_from_json_fn(ColumnPtr& column) {
             builder.append_null();
             continue;
         }
-
         JsonValue* json = viewer.value(row);
-        auto st = cast_vpjson_to<ToType, AllowThrowException>(json->to_vslice(), builder);
-        if (!st.ok()) {
-            if constexpr (AllowThrowException) {
-                THROW_RUNTIME_ERROR_WITH_TYPES_AND_VALUE(FromType, ToType, json->to_string().value_or(""));
+        if (lt_is_date<ToType> || lt_is_datetime<ToType>) {
+            RunTimeCppType<ToType> cpp_value{};
+            bool ok = true;
+            if constexpr (lt_is_date<ToType>) {
+                auto res = json->get_string();
+                ok = res.ok();
+
+                if (ok) {
+                    DateValue v;
+
+                    auto slice = res.value();
+                    bool right = v.from_string(slice.data, slice.size);
+                    if constexpr (AllowThrowException) {
+                        if (!right) {
+                            THROW_RUNTIME_ERROR_WITH_TYPES_AND_VALUE(TYPE_VARCHAR, TYPE_DATE, slice.to_string());
+                        }
+                    }
+                    cpp_value = v;
+                }
+            } else if constexpr (lt_is_datetime<ToType>) {
+                auto res = json->get_string();
+                ok = res.ok();
+
+                if (ok) {
+                    TimestampValue v;
+
+                    auto slice = res.value();
+                    bool right = v.from_string(slice.data, slice.size);
+                    if constexpr (AllowThrowException) {
+                        if (!right) {
+                            THROW_RUNTIME_ERROR_WITH_TYPES_AND_VALUE(TYPE_JSON, TYPE_DATETIME, slice.to_string());
+                        }
+                    }
+                    cpp_value = v;
+                }
             }
-            builder.append_null();
+            if (ok) {
+                builder.append(cpp_value);
+            } else {
+                if constexpr (AllowThrowException) {
+                    THROW_RUNTIME_ERROR_WITH_TYPES_AND_VALUE(FromType, ToType, json->to_string().value_or(""));
+                }
+                builder.append_null();
+            }
+        } else {
+            auto st = cast_vpjson_to<ToType, AllowThrowException>(json->to_vslice(), builder);
+            if (!st.ok()) {
+                if constexpr (AllowThrowException) {
+                    THROW_RUNTIME_ERROR_WITH_TYPES_AND_VALUE(FromType, ToType, json->to_string().value_or(""));
+                }
+                builder.append_null();
+            }
         }
     }
 
@@ -754,6 +799,7 @@ CUSTOMIZE_FN_CAST(TYPE_LARGEINT, TYPE_DATE, cast_to_date_fn);
 CUSTOMIZE_FN_CAST(TYPE_FLOAT, TYPE_DATE, cast_to_date_fn);
 CUSTOMIZE_FN_CAST(TYPE_DOUBLE, TYPE_DATE, cast_to_date_fn);
 CUSTOMIZE_FN_CAST(TYPE_DECIMALV2, TYPE_DATE, cast_to_date_fn);
+CUSTOMIZE_FN_CAST(TYPE_JSON, TYPE_DATE, cast_from_json_fn);
 UNARY_FN_CAST(TYPE_DATETIME, TYPE_DATE, TimestampToDate);
 // Time to date need rewrite CastExpr
 
@@ -845,6 +891,7 @@ CUSTOMIZE_FN_CAST(TYPE_LARGEINT, TYPE_DATETIME, cast_to_timestamp_fn);
 CUSTOMIZE_FN_CAST(TYPE_FLOAT, TYPE_DATETIME, cast_to_timestamp_fn);
 CUSTOMIZE_FN_CAST(TYPE_DOUBLE, TYPE_DATETIME, cast_to_timestamp_fn);
 CUSTOMIZE_FN_CAST(TYPE_DECIMALV2, TYPE_DATETIME, cast_to_timestamp_fn);
+CUSTOMIZE_FN_CAST(TYPE_JSON, TYPE_DATETIME, cast_from_json_fn);
 UNARY_FN_CAST(TYPE_DATE, TYPE_DATETIME, DateToTimestmap);
 // Time to datetime need rewrite CastExpr
 
@@ -1112,6 +1159,7 @@ public:
         } else {
             result_column = CastFn<FromType, ToType, AllowThrowException>::cast_fn(column);
         }
+
         DCHECK(result_column.get() != nullptr);
         if (result_column->is_constant()) {
             result_column->resize(column->size());
@@ -1648,6 +1696,8 @@ Expr* VectorizedCastExprFactory::create_primitive_cast(ObjectPool* pool, const T
                 CASE_FROM_JSON_TO(TYPE_FLOAT, allow_throw_exception);
                 CASE_FROM_JSON_TO(TYPE_DOUBLE, allow_throw_exception);
                 CASE_FROM_JSON_TO(TYPE_JSON, allow_throw_exception);
+                CASE_FROM_JSON_TO(TYPE_DATE, allow_throw_exception);
+                CASE_FROM_JSON_TO(TYPE_DATETIME, allow_throw_exception);
             default:
                 LOG(WARNING) << "Not support cast " << type_to_string(from_type) << " to " << type_to_string(to_type);
                 return nullptr;
