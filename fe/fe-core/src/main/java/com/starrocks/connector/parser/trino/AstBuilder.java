@@ -1282,16 +1282,31 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
                 return ScalarType.createType(PrimitiveType.DATETIME);
             }
         } else if (dataType instanceof RowDataType) {
-            RowDataType rowDataType = (RowDataType) dataType;
-            ArrayList<StructField> fields = new ArrayList<>(rowDataType.getFields().size());
-            for (int i = 0; i < rowDataType.getFields().size(); i++) {
-                final int finalIdx = i;
-                RowDataType.Field trinoField = rowDataType.getFields().get(i);
-                String name = trinoField.getName().map(Identifier::getCanonicalValue).orElseGet(() -> "col_" + finalIdx);
-                StructField field = new StructField(name, getType(trinoField.getType()));
-                fields.add(field);
+            boolean isNamed = false;
+            for (RowDataType.Field field : ((RowDataType) dataType).getFields()) {
+                if (field.getName().isPresent()) {
+                    isNamed = true;
+                    break;
+                }
             }
-            return new StructType(fields);
+            if (isNamed) {
+                List<StructField> fields = new ArrayList<>();
+                for (int i = 0; i < ((RowDataType) dataType).getFields().size(); i++) {
+                    RowDataType.Field field = ((RowDataType) dataType).getFields().get(i);
+                    if (field.getName().isPresent()) {
+                        fields.add(new StructField(field.getName().get().getValue(), getType(field.getType())));
+                    } else {
+                        fields.add(new StructField("col" + i, getType(field.getType())));
+                    }
+                }
+                return new StructType(fields, true);
+            } else {
+                List<Type> fields = new ArrayList<>();
+                for (RowDataType.Field field : ((RowDataType) dataType).getFields()) {
+                    fields.add(getType(field.getType()));
+                }
+                return new StructType(fields);
+            }
         } else {
             throw trinoParserUnsupportedException(String.format("Trino parser on StarRocks does not support the " +
                     "type %s now", dataType));
