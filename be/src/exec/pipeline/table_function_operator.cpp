@@ -86,7 +86,7 @@ Status TableFunctionOperator::prepare(RuntimeState* state) {
         return_types.emplace_back(return_type.type);
     }
 
-    if (table_function_name == "unnest" && arg_types.size() > 1) {
+    if (table_function_name == "unnest" && (arg_types.size() > 1 || return_types.size() > 1)) {
         _table_function = get_table_function(table_function_name, {}, {}, table_fn.binary_type);
     } else {
         _table_function = get_table_function(table_function_name, arg_types, return_types, table_fn.binary_type);

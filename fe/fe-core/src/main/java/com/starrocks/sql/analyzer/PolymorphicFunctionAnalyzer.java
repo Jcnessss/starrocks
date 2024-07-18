@@ -37,6 +37,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.starrocks.sql.analyzer.AnalyzerUtils.replaceNullType2Boolean;
 
@@ -134,6 +135,22 @@ public class PolymorphicFunctionAnalyzer {
         public Type apply(Type[] types) {
             MapType mapType = (MapType) types[0];
             return new MapType(mapType.getKeyType(), mapType.getValueType());
+        }
+    }
+
+    private static class MapAggDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            return new MapType(types[0], types[1]);
+        }
+    }
+
+    private static class ZipDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            List<Type> fields = new ArrayList<>();
+            fields.addAll(Arrays.stream(types).map(x -> ((ArrayType) x).getItemType()).collect(Collectors.toList()));
+            return new ArrayType(new StructType(fields));
         }
     }
 
@@ -428,6 +445,11 @@ public class PolymorphicFunctionAnalyzer {
                         return null;
                     }
                     Type t = ((ArrayType) paramType).getItemType();
+                    if (t.isStructType()) {
+                        realTableFnRetTypes.addAll(
+                                ((StructType) t).getFields().stream().map(x -> x.getType()).collect(Collectors.toList()));
+                        continue;
+                    }
                     realTableFnRetTypes.add(t);
                 }
                 return new TableFunction(fn.getFunctionName(), ((TableFunction) fn).getDefaultColumnNames(),
