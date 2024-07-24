@@ -15,10 +15,8 @@
 package com.starrocks.sql.analyzer;
 
 import com.starrocks.analysis.Expr;
-import com.starrocks.analysis.FunctionCallExpr;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TableName;
-import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.StructField;
 import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Type;
@@ -135,16 +133,11 @@ public class Field {
             return slotRef.getColumnName().equalsIgnoreCase(this.name);
         }
 
-
-        if ((originExpression instanceof FunctionCallExpr) &&
-                FunctionSet.ZIP.equals(originExpression.getFn().getFunctionName().getFunction())) {
+        if (relationAlias == null) {
             String[] onlyName = new String[] {null, null, null, name};
             if (tryToMatch(onlyName, 3, qualifiedName)) {
                 return true;
             }
-        }
-
-        if (relationAlias == null) {
             return false;
         }
 
