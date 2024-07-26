@@ -404,7 +404,7 @@ public class SimplifiedPredicateRule extends BottomUpScalarOperatorRewriteRule {
             for (int i = 0; i < call.getArguments().size(); i++) {
                 ArrayType array = (ArrayType) (call.getChild(i).getType());
                 ColumnRefOperator ref = new ColumnRefOperator(
-                     i + 2, array.getItemType(), names[i], call.getChild(i).isNullable(), true);
+                        i + 2, array.getItemType(), names[i], call.getChild(i).isNullable(), true);
                 refColumns.add(ref);
                 scalars.add(ref);
                 argTypes.add(array.getItemType());

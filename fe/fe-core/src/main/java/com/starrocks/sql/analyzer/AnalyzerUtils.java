@@ -1672,7 +1672,7 @@ public class AnalyzerUtils {
         }
         String functionName = functionCallExpr.getFnName().getFunction();
         if (FunctionSet.DATE_TRUNC.equalsIgnoreCase(functionName) ||
-                FunctionSet.TA_DATE_TRUNC.equalsIgnoreCase(functionName) {
+                FunctionSet.TA_DATE_TRUNC.equalsIgnoreCase(functionName)) {
             Expr expr = functionCallExpr.getParams().exprs().get(0);
             String functionGranularity = ((StringLiteral) expr).getStringValue();
             if (!prePartitionGranularity.equalsIgnoreCase(functionGranularity)) {

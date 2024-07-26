@@ -447,7 +447,7 @@ public class UnifiedMetadataTest {
                 minTimes = 1;
             }
             {
-                kuduMetadata.listPartitionNames("test_db", "test_tbl", -1);
+                kuduMetadata.listPartitionNames("test_db", "test_tbl");
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
@@ -470,7 +470,7 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof KuduTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl");
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
