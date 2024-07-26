@@ -231,6 +231,7 @@ public class PolymorphicFunctionAnalyzer {
             // it's mock, need handle it in expressionAnalyzer
             .put(FunctionSet.NAMED_STRUCT, new RowDeduce())
             .put(FunctionSet.ANY_VALUE, types -> types[0])
+            .put(FunctionSet.ZIP, new LambdaDeduce())
             .put(FunctionSet.getAggStateName(FunctionSet.ANY_VALUE), types -> types[0])
             .put(FunctionSet.getAggStateUnionName(FunctionSet.ANY_VALUE), types -> types[0])
             .put(FunctionSet.getAggStateMergeName(FunctionSet.ANY_VALUE), types -> types[0])

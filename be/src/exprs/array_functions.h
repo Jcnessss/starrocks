@@ -170,6 +170,7 @@ public:
     }
 
     DEFINE_VECTORIZED_FN(array_map);
+    DEFINE_VECTORIZED_FN(zip);
     DEFINE_VECTORIZED_FN(array_filter);
     DEFINE_VECTORIZED_FN(all_match);
     DEFINE_VECTORIZED_FN(any_match);

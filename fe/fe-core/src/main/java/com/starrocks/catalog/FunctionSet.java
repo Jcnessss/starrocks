@@ -445,6 +445,8 @@ public class FunctionSet {
 
     // high-order functions related lambda functions
     public static final String ARRAY_MAP = "array_map";
+
+    public static final String ZIP = "zip";
     public static final String TRANSFORM = "transform";
 
     // map functions:

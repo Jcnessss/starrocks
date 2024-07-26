@@ -92,6 +92,10 @@ public class CallOperator extends ScalarOperator {
         return fnName;
     }
 
+    public void setFnName(String name) {
+        this.fnName = name;
+    }
+
     public Function getFunction() {
         return fn;
     }

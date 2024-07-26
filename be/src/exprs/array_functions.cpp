@@ -1124,6 +1124,11 @@ StatusOr<ColumnPtr> ArrayFunctions::array_map([[maybe_unused]] FunctionContext* 
     return nullptr;
 }
 
+// cannot be called anymore
+StatusOr<ColumnPtr> ArrayFunctions::zip([[maybe_unused]] FunctionContext* context, const Columns& columns) {
+    return nullptr;
+}
+
 StatusOr<ColumnPtr> ArrayFunctions::array_filter(FunctionContext* context, const Columns& columns) {
     return ArrayFilter::process(context, columns);
 }

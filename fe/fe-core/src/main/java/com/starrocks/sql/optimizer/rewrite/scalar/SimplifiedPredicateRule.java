@@ -20,13 +20,18 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.BinaryType;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.FunctionName;
+import com.starrocks.catalog.ArrayType;
 import com.starrocks.catalog.Function;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.ScalarFunction;
+import com.starrocks.catalog.ScalarType;
+import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Type;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CaseWhenOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CompoundPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
 import com.starrocks.sql.optimizer.operator.scalar.InPredicateOperator;
@@ -39,6 +44,7 @@ import com.starrocks.sql.optimizer.rewrite.ScalarOperatorRewriteContext;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.text.StrTokenizer;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -388,6 +394,45 @@ public class SimplifiedPredicateRule extends BottomUpScalarOperatorRewriteRule {
             return simplifiedCoalesce(call);
         } else if (FunctionSet.JSON_QUERY.equalsIgnoreCase(call.getFnName())) {
             return simplifiedJsonQuery(call);
+        } else if (FunctionSet.ZIP.equals(call.getFnName())) {
+            List<ColumnRefOperator> refColumns = new ArrayList<>();
+            List<ScalarOperator> scalars = new ArrayList<>();
+            String[] names = {"x", "y", "z", "m", "n"};
+            List<Type> argTypes = new ArrayList<>();
+            Type[] types = new Type[call.getChildren().size() + 1];
+            types[0] = ScalarType.FUNCTION;
+            for (int i = 0; i < call.getArguments().size(); i++) {
+                ArrayType array = (ArrayType) (call.getChild(i).getType());
+                ColumnRefOperator ref = new ColumnRefOperator(
+                     i + 2, array.getItemType(), names[i], call.getChild(i).isNullable(), true);
+                refColumns.add(ref);
+                scalars.add(ref);
+                argTypes.add(array.getItemType());
+                types[i + 1] = call.getChild(i).getType();
+            }
+            FunctionName fnName = new FunctionName(call.getFunction().getFunctionName().getDb(), "row");
+            ScalarFunction fn = new ScalarFunction(fnName, argTypes, new StructType(argTypes), true);
+            fn.setFunctionId(170500);
+            fn.setId(170500);
+            fn.setBinaryType(TFunctionBinaryType.BUILTIN);
+            fn.setSymbolName("");
+            fn.setUserVisible(true);
+            CallOperator lambdaExpr = new CallOperator("row", Type.FUNCTION, scalars, fn);
+            ArrayType retType = new ArrayType(new StructType(argTypes));
+            lambdaExpr.setType(new StructType(argTypes));
+            call.getChildren().add(0, new LambdaFunctionOperator(refColumns, lambdaExpr, Type.FUNCTION));
+            call.setFnName("array_map");
+            call.setType(retType);
+            fnName = new FunctionName(call.getFunction().getFunctionName().getDb(), "array_map");
+            fn = new ScalarFunction(fnName, argTypes, call.getChild(1).getType(), true);
+            fn.setArgsType(types);
+            fn.setBinaryType(TFunctionBinaryType.BUILTIN);
+            call.setFunction(fn);
+            fn.setFunctionId(160100);
+            fn.setId(160100);
+            fn.setUserVisible(true);
+            fn.setSymbolName("");
+            return arrayMap(call);
         }
         return call;
     }
