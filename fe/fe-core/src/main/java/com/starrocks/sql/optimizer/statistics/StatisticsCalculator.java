@@ -36,6 +36,7 @@ import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.StarrocksTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
@@ -90,6 +91,7 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalProjectOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalRepeatOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalSchemaScanOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalStarrocksScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTableFunctionOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTableFunctionTableScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTopNOperator;
@@ -129,6 +131,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalProjectOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalRepeatOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalSchemaScanOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalStarrocksScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTableFunctionOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTopNOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalUnionOperator;
@@ -642,6 +645,27 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
             Map<ColumnRefOperator, Column> columnRefOperatorColumnMap) {
         if (context.getStatistics() == null) {
             String catalogName = ((KuduTable) table).getCatalogName();
+            Statistics stats = GlobalStateMgr.getCurrentState().getMetadataMgr().getTableStatistics(
+                    optimizerContext, catalogName, table, columnRefOperatorColumnMap, null, node.getPredicate(), -1);
+            context.setStatistics(stats);
+        }
+
+        return visitOperator(node, context);
+    }
+
+    public Void visitLogicalStarrocksScan(LogicalStarrocksScanOperator node, ExpressionContext context) {
+        return computeStarrocksScanNode(node, context, node.getTable(), node.getColRefToColumnMetaMap());
+    }
+
+    @Override
+    public Void visitPhysicalStarrocksScan(PhysicalStarrocksScanOperator node, ExpressionContext context) {
+        return computeStarrocksScanNode(node, context, node.getTable(), node.getColRefToColumnMetaMap());
+    }
+
+    private Void computeStarrocksScanNode(Operator node, ExpressionContext context, Table table,
+                                     Map<ColumnRefOperator, Column> columnRefOperatorColumnMap) {
+        if (context.getStatistics() == null) {
+            String catalogName = ((StarrocksTable) table).getCatalogName();
             Statistics stats = GlobalStateMgr.getCurrentState().getMetadataMgr().getTableStatistics(
                     optimizerContext, catalogName, table, columnRefOperatorColumnMap, null, node.getPredicate(), -1);
             context.setStatistics(stats);

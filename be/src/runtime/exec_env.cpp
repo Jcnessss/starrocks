@@ -324,6 +324,7 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
     _backend_client_cache = new BackendServiceClientCache(config::max_client_cache_size_per_host);
     _frontend_client_cache = new FrontendServiceClientCache(config::max_client_cache_size_per_host);
     _broker_client_cache = new BrokerServiceClientCache(config::max_client_cache_size_per_host);
+    _external_client_cache = new StarrocksExternalServiceClientCache(config::max_client_cache_size_per_host);
     // query_context_mgr keeps slotted map with 64 slot to reduce contention
     _query_context_mgr = new pipeline::QueryContextManager(6);
     RETURN_IF_ERROR(_query_context_mgr->init());
@@ -526,6 +527,7 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
     _backend_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "backend");
     _frontend_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "frontend");
     _broker_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "broker");
+    _external_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "external");
     RETURN_IF_ERROR(_result_mgr->init());
 
     // it means acting as compute node while store_path is empty. some threads are not needed for that case.
@@ -715,6 +717,7 @@ void ExecEnv::destroy() {
     SAFE_DELETE(_runtime_filter_cache);
     SAFE_DELETE(_driver_limiter);
     SAFE_DELETE(_broker_client_cache);
+    SAFE_DELETE(_external_client_cache);
     SAFE_DELETE(_frontend_client_cache);
     SAFE_DELETE(_backend_client_cache);
     SAFE_DELETE(_result_queue_mgr);

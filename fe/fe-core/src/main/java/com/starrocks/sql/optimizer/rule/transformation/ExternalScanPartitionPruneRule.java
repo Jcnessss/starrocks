@@ -51,6 +51,8 @@ public class ExternalScanPartitionPruneRule extends TransformationRule {
             new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_ODPS_SCAN);
     public static final ExternalScanPartitionPruneRule KUDU_SCAN =
             new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_KUDU_SCAN);
+    public static final ExternalScanPartitionPruneRule STARROCKS_SCAN =
+            new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_STARROCKS_SCAN);
 
     public ExternalScanPartitionPruneRule(OperatorType logicalOperatorType) {
         super(RuleType.TF_PARTITION_PRUNE, Pattern.create(logicalOperatorType));

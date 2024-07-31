@@ -39,6 +39,7 @@
 #include <arrow/buffer.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/writer.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/memory_pool.h>
 #include <arrow/record_batch.h>
 #include <arrow/status.h>
@@ -218,6 +219,26 @@ Status serialize_record_batch(const arrow::RecordBatch& record_batch, std::strin
     *result = buffer->ToString();
     // close the sink
     [[maybe_unused]] auto sk_close_st = sink->Close();
+    return Status::OK();
+}
+
+Status deserialize_record_batch(std::shared_ptr<arrow::RecordBatch>* record_batch, const std::string& serialized_string) {
+    auto input = arrow::io::BufferReader(serialized_string);
+    auto reader_res = arrow::ipc::RecordBatchStreamReader::Open(&input);
+    if (!reader_res.ok()) {
+        std::stringstream msg;
+        msg << "Read record batch failure, reason: " << reader_res.status().ToString();
+        return Status::InternalError(msg.str());
+    }
+    auto reader = reader_res.ValueOrDie();
+    auto record_res = reader->Next();
+    if (!record_res.ok()) {
+        std::stringstream msg;
+        msg << "No record batch found, reason: " << record_res.status().ToString();
+        return Status::InternalError(msg.str());
+    }
+    LOG(INFO) << record_res.ValueOrDie()->num_rows();
+    *record_batch = record_res.ValueOrDie();
     return Status::OK();
 }
 

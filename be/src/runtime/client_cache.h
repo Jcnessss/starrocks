@@ -42,6 +42,7 @@
 #include <vector>
 
 #include "common/status.h"
+#include "gen_cpp/build/gen_cpp/TStarrocksExternalService.h"
 #include "util/hash_util.hpp"
 #include "util/metrics.h"
 #include "util/thrift_client.h"
@@ -281,5 +282,8 @@ typedef ClientConnection<FrontendServiceClient> FrontendServiceConnection;
 class TFileBrokerServiceClient;
 typedef ClientCache<TFileBrokerServiceClient> BrokerServiceClientCache;
 typedef ClientConnection<TFileBrokerServiceClient> BrokerServiceConnection;
+class TStarrocksExternalServiceClient;
+typedef ClientCache<TStarrocksExternalServiceClient> StarrocksExternalServiceClientCache;
+typedef ClientConnection<TStarrocksExternalServiceClient> StarrocksExternalServiceConnection;
 
 } // namespace starrocks

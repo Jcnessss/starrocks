@@ -62,6 +62,7 @@ enum TPlanNodeType {
   ANALYTIC_EVAL_NODE,
   OLAP_REWRITE_NODE,
   KUDU_SCAN_NODE,
+  STARROCKS_SCAN_NODE,
   FILE_SCAN_NODE,
   EMPTY_SET_NODE,
   UNION_NODE,
@@ -295,6 +296,21 @@ struct TEsScanRange {
   4: required i32 shard_id
 }
 
+struct TStarrocksScanRange {
+  1: required string remote_be_host
+  2: required string remote_be_port
+  4: required list<i64> tablet_ids;
+}
+
+struct TStarrocksScanNode {
+  1: required Types.TTupleId tuple_id
+  4: required string query_plan
+  5: required string table_name
+  6: required string username
+  7: required string passwd
+  9: required string database
+}
+
 enum TIcebergFileContent {
     DATA,
     POSITION_DELETES,
@@ -417,6 +433,7 @@ struct TScanRange {
   20: optional THdfsScanRange hdfs_scan_range
   
   30: optional TBinlogScanRange binlog_scan_range
+  40: optional TStarrocksScanRange starrocks_scan_range
 }
 
 struct TMySQLScanNode {
@@ -1264,6 +1281,7 @@ struct TPlanNode {
   33: optional TIntersectNode intersect_node
   34: optional TExceptNode except_node
   35: optional TMergeJoinNode merge_join_node
+  36: optional TStarrocksScanNode starrocks_scan_node
 
   // For vector query engine
   // 50 is reserved, please don't use

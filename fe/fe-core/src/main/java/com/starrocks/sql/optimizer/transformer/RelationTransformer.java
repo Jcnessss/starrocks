@@ -116,6 +116,7 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalPaimonScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalProjectOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalSchemaScanOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalStarrocksScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTableFunctionOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTableFunctionTableScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalTopNOperator;
@@ -666,6 +667,9 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
             }
         } else if (Table.TableType.KUDU.equals(node.getTable().getType())) {
             scanOperator = new LogicalKuduScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
+                    columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
+        } else if (Table.TableType.STARROCKS.equals(node.getTable().getType())) {
+            scanOperator = new LogicalStarrocksScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
         } else if (Table.TableType.SCHEMA.equals(node.getTable().getType())) {
             scanOperator =

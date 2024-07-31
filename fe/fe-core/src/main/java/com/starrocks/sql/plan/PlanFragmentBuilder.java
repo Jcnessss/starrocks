@@ -113,6 +113,7 @@ import com.starrocks.planner.SchemaScanNode;
 import com.starrocks.planner.SelectNode;
 import com.starrocks.planner.SetOperationNode;
 import com.starrocks.planner.SortNode;
+import com.starrocks.planner.StarrocksScanNode;
 import com.starrocks.planner.TableFunctionNode;
 import com.starrocks.planner.UnionNode;
 import com.starrocks.planner.stream.StreamAggNode;
@@ -179,6 +180,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalRepeatOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalSchemaScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalSetOperation;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalStarrocksScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTableFunctionOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTableFunctionTableScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTopNOperator;
@@ -1363,6 +1365,46 @@ public class PlanFragmentBuilder {
 
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), kuduScanNode, DataPartition.RANDOM);
+            context.getFragments().add(fragment);
+            return fragment;
+        }
+
+        public PlanFragment visitPhysicalStarrocksScan(OptExpression optExpression, ExecPlan context) {
+            PhysicalStarrocksScanOperator node = (PhysicalStarrocksScanOperator) optExpression.getOp();
+
+            Table referenceTable = node.getTable();
+            context.getDescTbl().addReferencedTable(referenceTable);
+            TupleDescriptor tupleDescriptor = context.getDescTbl().createTupleDescriptor();
+            tupleDescriptor.setTable(referenceTable);
+
+            // set slot
+            prepareContextSlots(node, context, tupleDescriptor);
+
+            StarrocksScanNode starrocksScanNode =
+                    new StarrocksScanNode(context.getNextNodeId(), tupleDescriptor, "StarrocksScanNode");
+            starrocksScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
+            try {
+                // set predicate
+                ScalarOperatorToExpr.FormatterContext formatterContext =
+                        new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());
+                List<ScalarOperator> predicates = Utils.extractConjuncts(node.getPredicate());
+                for (ScalarOperator predicate : predicates) {
+                    starrocksScanNode.getConjuncts()
+                            .add(ScalarOperatorToExpr.buildExecExpression(predicate, formatterContext));
+                }
+                starrocksScanNode.setupScanRangeLocations(tupleDescriptor, node.getPredicate());
+            } catch (Exception e) {
+                LOG.warn("Kudu scan node get scan range locations failed : " + e);
+                throw new StarRocksPlannerException(e.getMessage(), INTERNAL_ERROR);
+            }
+
+            starrocksScanNode.setLimit(node.getLimit());
+
+            tupleDescriptor.computeMemLayout();
+            context.getScanNodes().add(starrocksScanNode);
+
+            PlanFragment fragment =
+                    new PlanFragment(context.getNextFragmentId(), starrocksScanNode, DataPartition.RANDOM);
             context.getFragments().add(fragment);
             return fragment;
         }

@@ -137,6 +137,7 @@ public class MaterializedViewAnalyzer {
                     Table.TableType.PAIMON,
                     Table.TableType.ODPS,
                     Table.TableType.KUDU,
+                    Table.TableType.STARROCKS,
                     Table.TableType.DELTALAKE,
                     Table.TableType.VIEW,
                     Table.TableType.HIVE_VIEW,

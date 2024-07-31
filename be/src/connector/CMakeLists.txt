@@ -31,4 +31,6 @@ add_library(Connector STATIC
         utils.cpp
         async_flush_stream_poller.cpp
         sink_memory_manager.cpp
+        starrocks_connector.h
+        starrocks_connector.cpp
 )

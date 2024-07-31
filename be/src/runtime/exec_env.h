@@ -83,6 +83,7 @@ struct RfTracePoint;
 class BackendServiceClient;
 class FrontendServiceClient;
 class TFileBrokerServiceClient;
+class TStarrocksExternalServiceClient;
 template <class T>
 class ClientCache;
 class HeartbeatFlags;
@@ -265,6 +266,7 @@ public:
     ClientCache<BackendServiceClient>* client_cache() { return _backend_client_cache; }
     ClientCache<FrontendServiceClient>* frontend_client_cache() { return _frontend_client_cache; }
     ClientCache<TFileBrokerServiceClient>* broker_client_cache() { return _broker_client_cache; }
+    ClientCache<TStarrocksExternalServiceClient>* external_client_cache() { return _external_client_cache; }
 
     // using template to simplify client cache management
     template <typename T>
@@ -358,6 +360,7 @@ private:
     ClientCache<BackendServiceClient>* _backend_client_cache = nullptr;
     ClientCache<FrontendServiceClient>* _frontend_client_cache = nullptr;
     ClientCache<TFileBrokerServiceClient>* _broker_client_cache = nullptr;
+    ClientCache<TStarrocksExternalServiceClient>* _external_client_cache = nullptr;
 
     PriorityThreadPool* _thread_pool = nullptr;
     ThreadPool* _streaming_load_thread_pool = nullptr;
@@ -424,6 +427,10 @@ inline ClientCache<FrontendServiceClient>* ExecEnv::get_client_cache<FrontendSer
 template <>
 inline ClientCache<TFileBrokerServiceClient>* ExecEnv::get_client_cache<TFileBrokerServiceClient>() {
     return _broker_client_cache;
+}
+template <>
+inline ClientCache<TStarrocksExternalServiceClient>* ExecEnv::get_client_cache<TStarrocksExternalServiceClient>() {
+    return _external_client_cache;
 }
 
 } // namespace starrocks

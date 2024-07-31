@@ -204,6 +204,7 @@ enum ConnectorType {
     FILE = 4,
     LAKE = 5,
     BINLOG = 6,
+    STARROCKS = 7
     ICEBERG = 7,
 };
 
@@ -217,6 +218,7 @@ public:
     static const std::string FILE;
     static const std::string LAKE;
     static const std::string BINLOG;
+    static const std::string STARROCKS;
     static const std::string ICEBERG;
 
     virtual ~Connector() = default;

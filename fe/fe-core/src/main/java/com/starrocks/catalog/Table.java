@@ -122,6 +122,9 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         BLACKHOLE,
         @SerializedName("KUDU")
         KUDU,
+        @SerializedName("STARROCKS")
+        STARROCKS;
+        KUDU,
         @SerializedName("METADATA")
         METADATA,
         @SerializedName("HIVE_VIEW")
@@ -346,7 +349,8 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
     }
 
     public boolean isExternalTableWithFileSystem() {
-        return isHiveTable() || isIcebergTable() || isHudiTable() || isDeltalakeTable() || isPaimonTable() || isKuduTable();
+        return isHiveTable() || isIcebergTable() || isHudiTable() || isDeltalakeTable() || isPaimonTable() || isKuduTable() ||
+                isStarrocksTable();
     }
 
     public boolean isHiveTable() {
@@ -387,6 +391,10 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
 
     public boolean isKuduTable() {
         return type == TableType.KUDU;
+    }
+
+    public boolean isStarrocksTable() {
+        return type == TableType.STARROCKS;
     }
 
     // for create table

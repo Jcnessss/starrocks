@@ -315,7 +315,7 @@ set(EXEC_FILES
     stream/aggregate/agg_group_state.cpp
     stream/aggregate/stream_aggregator.cpp
     stream/aggregate/stream_aggregate_operator.cpp
-    stream/stream_aggregate_node.cpp)
+    stream/stream_aggregate_node.cpp starrocks/starrocks_reader.cpp starrocks/starrocks_reader.h)
 
 add_library(Exec STATIC
     ${EXEC_FILES}

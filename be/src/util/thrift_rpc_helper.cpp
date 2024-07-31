@@ -150,4 +150,8 @@ template Status ThriftRpcHelper::rpc<TFileBrokerServiceClient>(
         const std::string& ip, const int32_t port,
         std::function<void(ClientConnection<TFileBrokerServiceClient>&)> callback, int timeout_ms);
 
+template Status ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
+        const std::string& ip, const int32_t port,
+        std::function<void(ClientConnection<TStarrocksExternalServiceClient>&)> callback, int timeout_ms);
+
 } // namespace starrocks
