@@ -122,6 +122,10 @@ public class BinaryPredicateOperator extends PredicateOperator {
         return getChild(0).debugString() + " " + type.toString() + " " + getChild(1).debugString();
     }
 
+    public String toSql() {
+        return getChild(0).toSql() + " " + type.toString() + " " + getChild(1).toSql();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

@@ -68,6 +68,22 @@ public class MultiInPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(" (");
+        sb.append(getChildren().stream().limit(tupleSize).map(ScalarOperator::toSql).collect(Collectors.joining(", ")));
+        sb.append(") ");
+        if (isNotIn) {
+            sb.append("NOT ");
+        }
+
+        sb.append("IN (");
+        sb.append(getChildren().stream().skip(tupleSize).map(ScalarOperator::toSql).collect(Collectors.joining(", ")));
+        sb.append(")");
+        return sb.toString();
+    }
+
+    @Override
     public String debugString() {
         return toString();
     }

@@ -54,6 +54,18 @@ public class ExistsPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        StringBuilder strBuilder = new StringBuilder();
+        if (isNotExists) {
+            strBuilder.append("NOT ");
+
+        }
+        strBuilder.append("EXISTS ");
+        strBuilder.append(getChild(0).toSql());
+        return strBuilder.toString();
+    }
+
+    @Override
     public String debugString() {
         StringBuilder strBuilder = new StringBuilder();
         if (isNotExists) {

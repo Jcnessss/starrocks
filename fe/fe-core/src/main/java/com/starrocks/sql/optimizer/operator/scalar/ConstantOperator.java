@@ -405,6 +405,15 @@ public final class ConstantOperator extends ScalarOperator implements Comparable
     }
 
     @Override
+    public String toSql() {
+        String toString = this.toString();
+        if (type.isDate() || type.isDatetime() || type.isJsonType() || type.isStringType()) {
+            return "\'" + toString + "\'";
+        }
+        return toString;
+    }
+
+    @Override
     public int hashCode() {
         return Objects.hash(value, type.getPrimitiveType(), isNull);
     }

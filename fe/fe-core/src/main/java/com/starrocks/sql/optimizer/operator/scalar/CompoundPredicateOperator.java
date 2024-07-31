@@ -108,6 +108,15 @@ public class CompoundPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        if (CompoundType.NOT.equals(type)) {
+            return "NOT " + getChild(0).toSql();
+        } else {
+            return getChild(0).toSql() + " " + type.toString() + " " + getChild(1).toSql();
+        }
+    }
+
+    @Override
     public String debugString() {
         if (CompoundType.NOT.equals(type)) {
             return "NOT " + getChild(0).debugString();

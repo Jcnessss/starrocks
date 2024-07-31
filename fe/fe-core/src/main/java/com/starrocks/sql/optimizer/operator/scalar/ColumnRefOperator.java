@@ -113,6 +113,11 @@ public final class ColumnRefOperator extends ScalarOperator {
         return id + ": " + name;
     }
 
+    @Override
+    public String toSql() {
+        return "`" + name + "`";
+    }
+
     public static String toString(Collection<ColumnRefOperator> columns) {
         StringJoiner joiner = new StringJoiner(", ", "{", "}");
         for (ColumnRefOperator column : columns) {

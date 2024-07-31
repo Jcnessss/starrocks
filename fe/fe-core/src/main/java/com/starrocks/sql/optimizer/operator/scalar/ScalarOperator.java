@@ -138,6 +138,10 @@ public abstract class ScalarOperator implements Cloneable {
     @Override
     public abstract String toString();
 
+    public String toSql() {
+        return "";
+    }
+
     @Override
     public abstract int hashCode();
 

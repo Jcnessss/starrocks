@@ -65,12 +65,12 @@ public class StarrocksScanNode extends ScanNode {
 
     public void setupScanRangeLocations(TupleDescriptor tupleDescriptor, ScalarOperator predicate) {
         List<String> fieldNames =
-                tupleDescriptor.getSlots().stream().map(s -> s.getColumn().getName()).collect(Collectors.toList());
+                tupleDescriptor.getSlots().stream().map(s -> "`" + s.getColumn().getName() + "`").collect(Collectors.toList());
         StringBuilder sql = new StringBuilder("select " + String.join(",", fieldNames) + " from " +
                 starrocksTable.getDbName() + "." + starrocksTable.getName());
-        sql.append(predicate == null ? ";" : " where " + predicate.toString() + ";");
+        sql.append(predicate == null ? ";" : " where " + predicate.toSql() + ";");
         RequestBody body =
-                RequestBody.create(JSON, "{ \"sql\" :  \" " + sql.toString() + " \" }");
+                RequestBody.create(JSON, "{ \"sql\" :  \" " + sql + " \" }");
         String rootAuth = Credentials.basic("root", "");
         String url = "http://" + starrocksTable.getRemoteFeHost() + ":" + starrocksTable.getRemoteFePort() + "/api/" + starrocksTable.getDbName() +
                 "/" + starrocksTable.getName() + PATH_URI;

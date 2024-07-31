@@ -85,6 +85,20 @@ public class InPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getChild(0)).append(" ");
+        if (isNotIn) {
+            sb.append("NOT ");
+        }
+
+        sb.append("IN (");
+        sb.append(getChildren().stream().skip(1).map(ScalarOperator::toSql).collect(Collectors.joining(", ")));
+        sb.append(")");
+        return sb.toString();
+    }
+
+    @Override
     public <R, C> R accept(ScalarOperatorVisitor<R, C> visitor, C context) {
         return visitor.visitInPredicate(this, context);
     }

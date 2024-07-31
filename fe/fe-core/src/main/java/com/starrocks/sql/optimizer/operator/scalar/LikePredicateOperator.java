@@ -64,6 +64,15 @@ public class LikePredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        if (LikeType.LIKE.equals(likeType)) {
+            return getChild(0).toSql() + " LIKE " + getChild(1).toSql();
+        }
+
+        return getChild(0).toSql() + " REGEXP " + getChild(1).toSql();
+    }
+
+    @Override
     public <R, C> R accept(ScalarOperatorVisitor<R, C> visitor, C context) {
         return visitor.visitLikePredicateOperator(this, context);
     }

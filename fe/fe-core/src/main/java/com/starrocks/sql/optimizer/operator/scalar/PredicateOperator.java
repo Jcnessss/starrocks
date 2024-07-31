@@ -62,6 +62,11 @@ public abstract class PredicateOperator extends ScalarOperator {
     }
 
     @Override
+    public String toSql() {
+        return "(" + arguments.stream().map(ScalarOperator::toSql).collect(Collectors.joining(", ")) + ")";
+    }
+
+    @Override
     public ColumnRefSet getUsedColumns() {
         ColumnRefSet used = new ColumnRefSet();
         for (ScalarOperator child : arguments) {

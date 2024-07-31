@@ -54,6 +54,15 @@ public class IsNullPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        if (!isNotNull) {
+            return getChild(0).toSql() + " IS NULL";
+        } else {
+            return getChild(0).toSql() + " IS NOT NULL";
+        }
+    }
+
+    @Override
     public <R, C> R accept(ScalarOperatorVisitor<R, C> visitor, C context) {
         return visitor.visitIsNullPredicate(this, context);
     }
