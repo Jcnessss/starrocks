@@ -2086,11 +2086,7 @@ StatusOr<ColumnPtr> TimeFunctions::ta_to_epoch_milli(FunctionContext* context, c
         } else {
             const auto& value = bt_viewer.value(i);
             int64_t offset;
-            LOG(INFO) << value;
-            LOG(INFO) << state->timezone_obj().name();
-            LOG(INFO) << cctz::utc_time_zone().name();
             if (TimezoneUtils::timezone_offsets(state->timezone_obj().name(), "UTC" , &offset)) {
-                LOG(INFO) << offset;
                 result.append(value/ 1000 + offset * 1000);
                 continue;
             } else {
@@ -2102,7 +2098,6 @@ StatusOr<ColumnPtr> TimeFunctions::ta_to_epoch_milli(FunctionContext* context, c
 }
 
 StatusOr<ColumnPtr> TimeFunctions::ta_to_date_int1(FunctionContext* context, const Columns& columns) {
-    LOG(INFO) << "ee";
     RETURN_IF_COLUMNS_ONLY_NULL(columns);
 
     size_t size = columns[0]->size(); // minimum number of rows.
@@ -2115,9 +2110,6 @@ StatusOr<ColumnPtr> TimeFunctions::ta_to_date_int1(FunctionContext* context, con
         } else {
             const auto& value = bt_viewer.value(i);
             DateTimeValue dtv;
-            LOG(INFO) << value;
-            int32_t v = value / 1000000;
-            LOG(INFO) << v;
             dtv.from_unixtime(value / 1000000, "+00:00");
             result.append(dtv.year() * 10000 + dtv.month() * 100 + dtv.day());
         }
