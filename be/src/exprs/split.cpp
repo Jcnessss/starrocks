@@ -228,7 +228,6 @@ StatusOr<ColumnPtr> StringFunctions::split(FunctionContext* context, const starr
 }
 
 StatusOr<ColumnPtr> StringFunctions::split_limit(FunctionContext* context, const starrocks::Columns& columns) {
-    DCHECK_EQ(columns.size(), 2);
     RETURN_IF_COLUMNS_ONLY_NULL(columns);
 
     ColumnViewer string_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
@@ -252,25 +251,23 @@ StatusOr<ColumnPtr> StringFunctions::split_limit(FunctionContext* context, const
         array_binary_column->reserve(row_nums * split_string.size(), haystack_columns->get_bytes().size());
 
         int32_t result_size = std::min(static_cast<int>(split_string.size()), limit);
-        LOG(INFO) << result_size;
         for (int row = 0; row < row_nums; ++row) {
             array_offsets->append(offset);
-            LOG(INFO) << offset;
             std::string final = "";
             for (int i = 0; i < split_string.size(); i++) {
                 if (i >= limit - 1) {
                     final += split_string[i];
                     if (i == split_string.size() - 1) {
                         array_binary_column->append(Slice(final.c_str()));
-                        LOG(INFO) << final;
+                        break;
                     }
+                    final += delimiter_viewer.value(0);
                 } else {
                     array_binary_column->append(Slice(split_string[i].c_str()));
                 }
             }
             offset += result_size;
         }
-        LOG(INFO) << offset;
         array_offsets->append(offset);
 
         return ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),
@@ -381,7 +378,9 @@ StatusOr<ColumnPtr> StringFunctions::split_limit(FunctionContext* context, const
                         final += split_string[i];
                         if (i == split_string.size() - 1) {
                             array_binary_column->append(Slice(final.c_str()));
+                            break;
                         }
+                        final += delimiter;
                     } else {
                         array_binary_column->append(Slice(split_string[i].c_str()));
                     }
