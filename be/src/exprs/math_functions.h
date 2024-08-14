@@ -133,6 +133,8 @@ public:
      * @return DoubleColumn
      */
     DEFINE_VECTORIZED_FN(cos);
+    DEFINE_VECTORIZED_FN(is_finite_double);
+    DEFINE_VECTORIZED_FN(is_finite_float);
 
     /**
      * @param columns: [DoubleColumn]

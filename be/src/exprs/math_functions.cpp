@@ -208,6 +208,9 @@ DEFINE_UNARY_FN_WITH_IMPL(log2Impl, v) {
 
 DEFINE_MATH_UNARY_WITH_OUTPUT_NAN_CHECK_FN(log2, TYPE_DOUBLE, TYPE_DOUBLE);
 
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_finite_double, TYPE_DOUBLE, TYPE_BOOLEAN, std::isfinite);
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_finite_float, TYPE_FLOAT, TYPE_BOOLEAN, std::isfinite);
+
 // square
 DEFINE_UNARY_FN_WITH_IMPL(squareImpl, v) {
     return v * v;

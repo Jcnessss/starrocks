@@ -189,6 +189,8 @@ vectorized_functions = [
     [10321, "conv", True, False, "VARCHAR", ["VARCHAR", "TINYINT", "TINYINT"], "MathFunctions::conv_string"],
 
     [10322, "square", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::square"],
+    [10331, "is_finite", True, False, "BOOLEAN", ["FLOAT"], "MathFunctions::is_finite_float"],
+    [10332, "is_finite", True, False, "BOOLEAN", ["DOUBLE"], "MathFunctions::is_finite_double"],
 
     [10330, "cbrt", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::cbrt"],
 
