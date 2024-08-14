@@ -22,6 +22,7 @@
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
+#include "exprs/agg/retention_ta.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -60,7 +61,11 @@ AggregateFunctionPtr AggregateFactory::MakeDictMergeAggregateFunction() {
 }
 
 AggregateFunctionPtr AggregateFactory::MakeRetentionAggregateFunction() {
-    return std::make_shared<RetentionAggregateFunction>();
+    return std::make_shared<RetentionTaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionTaAggregateFunction() {
+    return std::make_shared<RetentionTaAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {

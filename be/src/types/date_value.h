@@ -81,6 +81,9 @@ public:
     void set_end_of_month();
     void set_end_of_quarter();
     void set_end_of_year();
+    void set_julian(JulianDate julian) {
+        _julian = julian;
+    }
 
     bool is_valid() const;
 

@@ -60,6 +60,7 @@ void AggregateFuncResolver::register_others() {
 
     add_array_mapping<TYPE_ARRAY, TYPE_VARCHAR>("dict_merge");
     add_array_mapping<TYPE_ARRAY, TYPE_ARRAY>("retention");
+    add_array_mapping<TYPE_DATE, TYPE_ARRAY>("retention_ta");
 
     // sum, avg, distinct_sum use decimal128 as intermediate or result type to avoid overflow
     add_decimal_mapping<TYPE_DECIMAL32, TYPE_DECIMAL128>("decimal_multi_distinct_sum");

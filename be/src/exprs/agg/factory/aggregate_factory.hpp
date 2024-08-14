@@ -177,6 +177,7 @@ public:
 
     static AggregateFunctionPtr MakeDictMergeAggregateFunction();
     static AggregateFunctionPtr MakeRetentionAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionTaAggregateFunction();
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();
