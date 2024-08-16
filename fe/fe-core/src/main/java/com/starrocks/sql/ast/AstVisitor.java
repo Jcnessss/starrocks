@@ -1227,6 +1227,11 @@ public interface AstVisitor<R, C> {
         return visitNode(clause, context);
     }
 
+    // ------------------------------------------- Table Operation ----------------------------------==-----------------
+    default R visitAlterTableOperationClause(AlterTableOperationClause clause, C context) {
+        return visitNode(clause, context);
+    }
+
     // ------------------------------------------- Relation ----------------------------------==------------------------
 
     default R visitRelation(Relation node, C context) {

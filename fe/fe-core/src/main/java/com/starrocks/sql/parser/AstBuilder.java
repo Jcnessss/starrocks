@@ -151,6 +151,7 @@ import com.starrocks.sql.ast.AlterStorageVolumeStmt;
 import com.starrocks.sql.ast.AlterSystemStmt;
 import com.starrocks.sql.ast.AlterTableClause;
 import com.starrocks.sql.ast.AlterTableCommentClause;
+import com.starrocks.sql.ast.AlterTableOperationClause;
 import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.AlterUserStmt;
 import com.starrocks.sql.ast.AlterViewClause;
@@ -1341,6 +1342,12 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             List<AlterClause> alterClauses = visit(context.alterClause(), AlterClause.class);
             return new AlterTableStmt(targetTableName, alterClauses, pos);
         }
+    }
+
+    @Override
+    public ParseNode visitTableOperationClause(StarRocksParser.TableOperationClauseContext context) {
+        FunctionCallExpr fun = (FunctionCallExpr) visit(context.functionCall());
+        return new AlterTableOperationClause(createPos(context), fun.getFnName().getFunction(), fun.getParams().exprs());
     }
 
     @Override

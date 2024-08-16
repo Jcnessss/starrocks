@@ -880,6 +880,7 @@ alterClause
     | addFieldClause
     | dropFieldClause
     | dropPersistentIndexClause
+    | tableOperationClause
 
     //Alter partition clause
     | addPartitionClause
@@ -1052,6 +1053,10 @@ integer_list
 
 dropPersistentIndexClause
     : DROP PERSISTENT INDEX ON TABLETS integer_list
+    ;
+
+tableOperationClause
+    : EXECUTE functionCall
     ;
 
 // ---------Alter partition clause---------
