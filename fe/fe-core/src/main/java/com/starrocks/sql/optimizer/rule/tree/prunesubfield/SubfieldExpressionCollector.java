@@ -15,6 +15,7 @@
 package com.starrocks.sql.optimizer.rule.tree.prunesubfield;
 
 import com.google.common.collect.Lists;
+import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.google.common.collect.Sets;
 import com.starrocks.catalog.Type;
 import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
@@ -79,7 +80,7 @@ public class SubfieldExpressionCollector extends ScalarOperatorVisitor<Void, Voi
 
     @Override
     public Void visitCollectionElement(CollectionElementOperator collectionElementOp, Void context) {
-        if (collectionElementOp.getUsedColumns().isEmpty()) {
+        if (collectionElementOp.getUsedColumns().isEmpty() || !checkArgumentRecursively(collectionElementOp)) {
             return null;
         }
         complexExpressions.add(collectionElementOp);
@@ -88,7 +89,7 @@ public class SubfieldExpressionCollector extends ScalarOperatorVisitor<Void, Voi
 
     @Override
     public Void visitSubfield(SubfieldOperator subfieldOperator, Void context) {
-        if (subfieldOperator.getUsedColumns().isEmpty()) {
+        if (subfieldOperator.getUsedColumns().isEmpty() || !checkArgumentRecursively(subfieldOperator)) {
             return null;
         }
         complexExpressions.add(subfieldOperator);
@@ -123,5 +124,14 @@ public class SubfieldExpressionCollector extends ScalarOperatorVisitor<Void, Voi
 
         complexExpressions.add(call);
         return null;
+    }
+
+    private boolean checkArgumentRecursively(ScalarOperator operator) {
+        for (ScalarOperator child : operator.getChildren()) {
+            if (!checkArgumentRecursively(child) || child.getOpType() == OperatorType.LAMBDA_ARGUMENT) {
+                return false;
+            }
+        }
+        return true;
     }
 }
