@@ -257,6 +257,7 @@ public class FunctionSet {
     public static final String PERCENTILE_DISC = "percentile_disc";
     public static final String RETENTION = "retention";
     public static final String RETENTION_TA = "retention_ta";
+    public static final String TA_DATE_COLLECT = "ta_date_collect";
 
     public static final String STDDEV = "stddev";
     public static final String STDDEV_POP = "stddev_pop";
@@ -1171,6 +1172,9 @@ public class FunctionSet {
 
         addBuiltin(AggregateFunction.createBuiltin(RETENTION_TA, Lists.newArrayList(Type.DATE, Type.INT, Type.VARCHAR),
                 Type.ARRAY_BOOLEAN, Type.ARRAY_BIGINT, false, false, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TA_DATE_COLLECT, Lists.newArrayList(Type.DATE),
+                Type.VARBINARY, Type.VARBINARY, false, false, false));
 
 
         // Type.DATE must before Type.DATATIME, because DATE could be considered as DATETIME.

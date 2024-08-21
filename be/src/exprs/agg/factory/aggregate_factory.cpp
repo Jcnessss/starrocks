@@ -20,6 +20,7 @@
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
+#include "exprs/agg/date_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/retention_ta.h"
@@ -66,6 +67,10 @@ AggregateFunctionPtr AggregateFactory::MakeRetentionAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeRetentionTaAggregateFunction() {
     return std::make_shared<RetentionTaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {
+    return std::make_shared<DateCollectFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {
