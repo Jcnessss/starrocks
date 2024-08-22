@@ -80,6 +80,12 @@ StatusOr<std::unique_ptr<ORCColumnReader>> ORCColumnReader::create(const TypeDes
         std::vector<std::unique_ptr<ORCColumnReader>> child_readers;
         for (size_t i = 0; i < type.children.size(); i++) {
             const TypeDescriptor& child_type = type.children[i];
+            if (!orc_mapping->contains(i)) {
+                ASSIGN_OR_RETURN(std::unique_ptr<ORCColumnReader> child_reader,
+                                 ORCColumnReader::create_null_column_reader(child_type, true, reader));
+                child_readers.emplace_back(std::move(child_reader));
+                continue ;
+            }
             ASSIGN_OR_RETURN(
                     std::unique_ptr<ORCColumnReader> child_reader,
                     ORCColumnReader::create(child_type, orc_mapping->get_orc_type_child_mapping(i).orc_type, true,
@@ -123,6 +129,9 @@ StatusOr<std::unique_ptr<ORCColumnReader>> ORCColumnReader::create(const TypeDes
         }
         return std::make_unique<MapColumnReader>(type, orc_type, nullable, reader, std::move(child_readers));
     }
+    case TYPE_NULL: {
+        return std::make_unique<NullColumnReader>(type, true, reader);
+    }
     default:
         return Status::InternalError("Unsupported type");
     }
@@ -134,8 +143,19 @@ StatusOr<std::unique_ptr<ORCColumnReader>> ORCColumnReader::create_default_colum
     return std::make_unique<DefaultColumnReader>(type, nullable, reader);
 }
 
+StatusOr<std::unique_ptr<ORCColumnReader>> ORCColumnReader::create_null_column_reader(const TypeDescriptor& type,
+                                                                                         bool nullable,
+                                                                                         OrcChunkReader* reader) {
+    return std::make_unique<NullColumnReader>(type, nullable, reader);
+}
+
 Status DefaultColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col, size_t from, size_t size) {
     col->append_default(size);
+    return Status::OK();
+}
+
+Status NullColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col, size_t from, size_t size) {
+    col->append_nulls(size);
     return Status::OK();
 }
 
@@ -945,6 +965,10 @@ Status StructColumnReader::_fill_struct_column(orc::ColumnVectorBatch* cvb, Colu
     Columns& field_columns = col_struct->fields_column();
 
     for (size_t i = 0; i < _type.children.size(); i++) {
+        if (_child_readers[i]->get_orc_type() == nullptr) {
+            RETURN_IF_ERROR(_child_readers[i]->get_next(nullptr, field_columns[i], from, size));
+            continue;
+        }
         size_t column_id = _child_readers[i]->get_orc_type()->getColumnId();
         orc::ColumnVectorBatch* field_cvb = orc_struct->fieldsColumnIdMap[column_id];
         RETURN_IF_ERROR(_child_readers[i]->get_next(field_cvb, field_columns[i], from, size));

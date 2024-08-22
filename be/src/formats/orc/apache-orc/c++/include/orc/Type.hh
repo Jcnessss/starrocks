@@ -43,7 +43,8 @@ enum TypeKind {
     DATE = 15,
     VARCHAR = 16,
     CHAR = 17,
-    TIMESTAMP_INSTANT = 18
+    TIMESTAMP_INSTANT = 18,
+    NOT_FOUND = 19
 };
 
 class Type {
@@ -91,6 +92,8 @@ public:
      * Build a Type object from string text representation.
      */
     static ORC_UNIQUE_PTR<Type> buildTypeFromString(const std::string& input);
+
+    static ORC_UNIQUE_PTR<Type> createNullType();
 };
 
 const int64_t DEFAULT_DECIMAL_SCALE = 18;

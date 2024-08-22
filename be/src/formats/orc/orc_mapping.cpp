@@ -59,10 +59,15 @@ Status OrcMapping::set_include_column_id(const uint64_t slot_pos, const TypeDesc
 
 Status OrcMapping::set_include_column_id_by_type(const OrcMappingPtr& mapping, const TypeDescriptor& desc,
                                                  std::list<uint64_t>* column_id_list) {
-    DCHECK(mapping != nullptr);
+    if (mapping == nullptr) {
+        return Status::OK();
+    }
     DCHECK(desc.is_complex_type());
     if (desc.is_struct_type()) {
         for (size_t i = 0; i < desc.children.size(); i++) {
+            if (!mapping->contains(i)) {
+                continue ;
+            }
             const TypeDescriptor& child_type = desc.children[i];
             if (child_type.is_complex_type()) {
                 RETURN_IF_ERROR(set_include_column_id_by_type(mapping->get_orc_type_child_mapping(i).orc_mapping,
@@ -271,10 +276,7 @@ Status OrcMappingFactory::_set_child_mapping(const OrcMappingPtr& mapping, const
             std::string field_name = Utils::format_name(origin_type.field_names[index], options.case_sensitive);
             auto it = tmp_orc_fieldname_2_pos.find(field_name);
             if (it == tmp_orc_fieldname_2_pos.end()) {
-                auto s = strings::Substitute(
-                        "OrcChunkReader::_set_child_mapping not found struct subfield $0, file = $1", field_name,
-                        options.filename);
-                return Status::NotFound(s);
+                continue ;
             }
             const orc::Type* orc_child_type = orc_type->getSubtype(it->second);
             const TypeDescriptor& origin_child_type = origin_type.children[index];
@@ -313,7 +315,6 @@ Status OrcMappingFactory::_set_child_mapping(const OrcMappingPtr& mapping, const
             RETURN_IF_ERROR(_check_orc_type_can_convert_2_logical_type(orc_type->getSubtype(1), origin_type.children[1],
                                                                        options));
         }
-
         // Map's key must be primitive type
         mapping->add_mapping(0, nullptr, orc_type->getSubtype(0));
 

@@ -78,6 +78,9 @@ public:
     static StatusOr<std::unique_ptr<ORCColumnReader>> create_default_column_reader(const TypeDescriptor& type,
                                                                                    bool nullable,
                                                                                    OrcChunkReader* reader);
+    static StatusOr<std::unique_ptr<ORCColumnReader>> create_null_column_reader(const TypeDescriptor& type,
+                                                                                   bool nullable,
+                                                                                   OrcChunkReader* reader);
     const orc::Type* get_orc_type() { return _orc_type; }
 
 protected:
@@ -325,6 +328,14 @@ public:
 
 private:
     Status _fill_struct_column(orc::ColumnVectorBatch* cvb, ColumnPtr& col, size_t from, size_t size);
+};
+
+class NullColumnReader : public PrimitiveColumnReader {
+public:
+    NullColumnReader(const TypeDescriptor& type, bool nullable, OrcChunkReader* reader)
+            : PrimitiveColumnReader(type, nullptr, nullable, reader) {}
+    ~NullColumnReader() override = default;
+    Status get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col, size_t from, size_t size) override;
 };
 
 } // namespace starrocks

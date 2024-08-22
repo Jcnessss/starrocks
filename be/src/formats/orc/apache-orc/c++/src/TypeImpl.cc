@@ -561,6 +561,10 @@ ORC_UNIQUE_PTR<Type> Type::buildTypeFromString(const std::string& input) {
     return std::move(res.first);
 }
 
+ORC_UNIQUE_PTR<Type> Type::createNullType() {
+    return std::unique_ptr<Type>(new TypeImpl(NOT_FOUND));
+}
+
 std::unique_ptr<Type> TypeImpl::parseArrayType(const std::string& input, size_t start, size_t end) {
     auto* arrayType = new TypeImpl(LIST);
     std::unique_ptr<Type> return_value = std::unique_ptr<Type>(arrayType);

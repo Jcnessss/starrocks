@@ -300,6 +300,10 @@ static Status _create_type_descriptor_by_orc(const TypeDescriptor& origin_type, 
         // We need copy the all struct subfields
         for (size_t index = 0; index < field_size; index++) {
             result->field_names.emplace_back(origin_type.field_names[index]);
+            if (!mapping->contains(index)) {
+                result->children.emplace_back(origin_type.children[index]);
+                continue ;
+            }
             TypeDescriptor& sub_field_type = result->children.emplace_back();
             RETURN_IF_ERROR(_create_type_descriptor_by_orc(
                     origin_type.children.at(index), mapping->get_orc_type_child_mapping(index).orc_type,
