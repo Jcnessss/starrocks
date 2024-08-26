@@ -20,9 +20,10 @@
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
-#include "exprs/agg/factory/aggregate_factory.hpp"
-#include "exprs/agg/retention_ta.h"
 #include "exprs/agg/date_collect_ta.h"
+#include "exprs/agg/factory/aggregate_factory.hpp"
+#include "exprs/agg/retention_lost_date_collect_agg.h"
+#include "exprs/agg/retention_ta.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -203,6 +204,9 @@ public:
             } else if (name == "ta_date_collect") {
                 auto date_collect = AggregateFactory::MakeDateCollectAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<DateCollectState, false>(date_collect);
+            } else if (name == "retention_lost_date_collect_agg") {
+                auto retention_lost = AggregateFactory::MakeRetentionLostAggregateFunction();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<RetentionLostState, false>(retention_lost);
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {
@@ -220,6 +224,8 @@ public:
                 return AggregateFactory::MakeRetentionTaAggregateFunction();
             } else if (name == "ta_date_collect") {
                 return AggregateFactory::MakeDateCollectAggregateFunction();
+            } else if (name == "retention_lost_date_collect_agg") {
+                return AggregateFactory::MakeRetentionLostAggregateFunction();
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {

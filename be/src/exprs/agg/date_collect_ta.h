@@ -44,12 +44,12 @@ struct DateCollectState {
         int key = date / 100;
         int day = date % 100;
         if (!month_to_index.contains(key)) {
-            uint64_t v = static_cast<uint64_t>(key) << 32 | bool_values[day];
+            uint64_t v = (static_cast<uint64_t>(key) << 32) | bool_values[day - 1];
             dates.emplace_back(v);
             month_to_index[key] = dates.size() - 1;
         } else {
             int index = month_to_index[key];
-            dates[index] |= bool_values[day];
+            dates[index] |= bool_values[day - 1];
         }
     }
 
@@ -96,7 +96,7 @@ public:
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
-        const auto* input_column = down_cast<const BinaryColumn*>(column);
+        const auto* input_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(column));
         Slice serialized = input_column->get(row_num).get_slice();
         size_t offset = 0;
         size_t size;
@@ -111,13 +111,13 @@ public:
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        serialize_state(this->data(state), down_cast<BinaryColumn*>(to));
+        serialize_state(this->data(state), down_cast<BinaryColumn*>(ColumnHelper::get_data_column(to)));
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         std::vector<uint64_t> copy(this->data(state).dates);
         std::sort(copy.begin(), copy.end());
-        serialize_state(this->data(state), down_cast<BinaryColumn*>(to));
+        serialize_state(this->data(state), down_cast<BinaryColumn*>(ColumnHelper::get_data_column(to)));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

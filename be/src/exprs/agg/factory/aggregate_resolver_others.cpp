@@ -78,6 +78,8 @@ void AggregateFuncResolver::register_others() {
     add_general_mapping<AnyValueSemiState>("any_value", false, AggregateFactory::MakeAnyValueSemiAggregateFunction());
     add_general_mapping_notnull("array_agg2", false, AggregateFactory::MakeArrayAggAggregateFunctionV2());
     add_general_mapping_notnull("group_concat2", false, AggregateFactory::MakeGroupConcatAggregateFunctionV2());
+    add_general_mapping_notnull("retention_lost_date_collect_agg",
+                                false, AggregateFactory::MakeRetentionLostAggregateFunction());
 }
 
 } // namespace starrocks

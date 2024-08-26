@@ -23,6 +23,7 @@
 #include "exprs/agg/date_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
+#include "exprs/agg/retention_lost_date_collect_agg.h"
 #include "exprs/agg/retention_ta.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
@@ -67,6 +68,10 @@ AggregateFunctionPtr AggregateFactory::MakeRetentionAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeRetentionTaAggregateFunction() {
     return std::make_shared<RetentionTaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostAggregateFunction() {
+    return std::make_shared<RetentionLostAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {
