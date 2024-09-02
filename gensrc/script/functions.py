@@ -666,6 +666,7 @@ vectorized_functions = [
     [70418, 'coalesce', True, False, 'ANY_MAP', ['ANY_MAP', '...'], 'nullptr'],
     [70419, 'coalesce', True, False, 'ANY_STRUCT', ['ANY_STRUCT', '...'], 'nullptr'],
     [70420, 'coalesce', True, False, 'JSON', ['JSON', '...'], 'nullptr'],
+    [70421, 'coalesce', True, False, 'VARBINARY', ['VARBINARY', '...'], 'nullptr'],
 
     [70415, 'esquery', True, False, 'BOOLEAN', ['VARCHAR', 'VARCHAR'], 'ESFunctions::match'],
 
