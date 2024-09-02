@@ -516,7 +516,6 @@ private:
     CASE_TYPE(TYPE_DECIMAL32, CLASS);  \
     CASE_TYPE(TYPE_DECIMAL64, CLASS);  \
     CASE_TYPE(TYPE_DECIMAL128, CLASS); \
-    CASE_TYPE(TYPE_BINARY, CLASS);     \
     CASE_TYPE(TYPE_VARBINARY, CLASS);
 
 Expr* VectorizedConditionExprFactory::create_if_null_expr(const starrocks::TExprNode& node) {

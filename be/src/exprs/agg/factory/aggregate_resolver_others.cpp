@@ -14,6 +14,7 @@
 
 #include "exprs/agg/aggregate_factory.h"
 #include "exprs/agg/any_value.h"
+#include "exprs/agg/bool_or.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/group_concat.h"
@@ -41,6 +42,8 @@ void AggregateFuncResolver::register_others() {
                                                             AggregateFactory::MakePercentileApproxAggregateFunction());
     add_aggregate_mapping<TYPE_PERCENTILE, TYPE_PERCENTILE, PercentileValue>(
             "percentile_union", false, AggregateFactory::MakePercentileUnionAggregateFunction());
+    add_aggregate_mapping<TYPE_BOOLEAN, TYPE_BOOLEAN, BooleanOrState>(
+            "bool_or", false, AggregateFactory::MakeBooleanOrAggregateFunction());
 
     add_aggregate_mapping_variadic<TYPE_DOUBLE, TYPE_DOUBLE, PercentileState<TYPE_DOUBLE>>(
             "percentile_cont", false, AggregateFactory::MakePercentileContAggregateFunction<TYPE_DOUBLE>());

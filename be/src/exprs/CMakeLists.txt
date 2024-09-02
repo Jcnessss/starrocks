@@ -102,6 +102,9 @@ set(EXPR_FILES
   dictionary_get_expr.cpp
   ngram.cpp
   match_expr.cpp
+  agg/map_agg.h
+  agg/bool_or.h
 )
+
 
 add_library(Exprs ${EXPR_FILES})

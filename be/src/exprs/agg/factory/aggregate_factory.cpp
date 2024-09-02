@@ -20,6 +20,7 @@
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
+#include "exprs/agg/bool_or.h"
 #include "exprs/agg/date_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
@@ -72,6 +73,10 @@ AggregateFunctionPtr AggregateFactory::MakeRetentionTaAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeRetentionLostAggregateFunction() {
     return std::make_shared<RetentionLostAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeBooleanOrAggregateFunction() {
+    return std::make_shared<BooleanOrAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {

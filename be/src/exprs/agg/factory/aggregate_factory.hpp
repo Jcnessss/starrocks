@@ -180,6 +180,7 @@ public:
     static AggregateFunctionPtr MakeRetentionTaAggregateFunction();
     static AggregateFunctionPtr MakeRetentionLostAggregateFunction();
     static AggregateFunctionPtr MakeDateCollectAggregateFunction();
+    static AggregateFunctionPtr MakeBooleanOrAggregateFunction();
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();

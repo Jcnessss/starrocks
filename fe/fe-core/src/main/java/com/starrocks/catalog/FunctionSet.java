@@ -282,6 +282,7 @@ public class FunctionSet {
     public static final String MULTI_DISTINCT_COUNT = "multi_distinct_count";
     public static final String MULTI_DISTINCT_SUM = "multi_distinct_sum";
     public static final String DICT_MERGE = "dict_merge";
+    public static final String BOOL_OR = "bool_or";
     public static final String WINDOW_FUNNEL = "window_funnel";
     public static final String DISTINCT_PC = "distinct_pc";
     public static final String DISTINCT_PCSA = "distinct_pcsa";
@@ -1227,6 +1228,8 @@ public class FunctionSet {
                 Type.VARCHAR, Type.VARCHAR, true, false, false));
         addBuiltin(AggregateFunction.createBuiltin(DICT_MERGE, Lists.newArrayList(Type.ARRAY_VARCHAR),
                 Type.VARCHAR, Type.VARCHAR, true, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(BOOL_OR, Lists.newArrayList(Type.BOOLEAN),
+                Type.BOOLEAN, Type.BOOLEAN, true, false, false));
         // flat json meta
         addBuiltin(AggregateFunction.createBuiltin(FLAT_JSON_META, Lists.newArrayList(Type.JSON),
                 Type.ARRAY_VARCHAR, Type.ARRAY_VARCHAR, false, false, false));
