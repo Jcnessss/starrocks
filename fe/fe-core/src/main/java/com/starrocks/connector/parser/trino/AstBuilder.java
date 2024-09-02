@@ -722,6 +722,19 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
 
     @Override
     protected ParseNode visitFunctionCall(FunctionCall node, ParseTreeContext context) {
+        if (node.getFilter().isPresent()) {
+            if (node.getArguments().size() == 1) {
+                List<Expression> ifArgs = new ArrayList<>();
+                ifArgs.add(node.getFilter().get());
+                ifArgs.add(node.getArguments().get(0));
+                ifArgs.add(new io.trino.sql.tree.NullLiteral());
+                io.trino.sql.tree.QualifiedName ifName = io.trino.sql.tree.QualifiedName.of("if");
+                Expression replace = new FunctionCall(ifName, ifArgs);
+
+                node.getArguments().clear();
+                node.getArguments().add(replace);
+            }
+        }
         List<Expr> arguments = visit(node.getArguments(), context, Expr.class);
 
         Expr callExpr;
