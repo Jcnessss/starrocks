@@ -8,6 +8,8 @@ EDIT_LOG_PORT=9010
 QUERY_PORT=9030
 # host_type, default "IP"
 HOST_TYPE=${HOST_TYPE:-"IP"}
+# enable_debug, fefault "false"
+ENABLE_DEBUG=${ENABLE_DEBUG:-"false"}
 # FE leader
 FE_LEADER=
 # probe interval: 2 seconds
@@ -240,6 +242,10 @@ start_fe_no_meta()
     if [[ "x$LOG_CONSOLE" == "x1" ]] ; then
         opts+=" --logconsole"
     fi
+
+    if [[ "x$ENABLE_DEBUG" == "xtrue" ]] ; then
+        opts+=" --debug"
+    fi
     log_stderr "first start with no meta run start_fe.sh with additional options: '$opts'"
     $STARROCKS_HOME/bin/start_fe.sh $opts
 }
@@ -253,6 +259,10 @@ start_fe_with_meta()
 
     if [[ "x$LOG_CONSOLE" == "x1" ]] ; then
         opts+=" --logconsole"
+    fi
+
+    if [[ "x$ENABLE_DEBUG" == "xtrue" ]] ; then
+        opts+=" --debug"
     fi
     log_stderr "start with meta run start_fe.sh with additional options: '$opts'"
     $STARROCKS_HOME/bin/start_fe.sh $opts
