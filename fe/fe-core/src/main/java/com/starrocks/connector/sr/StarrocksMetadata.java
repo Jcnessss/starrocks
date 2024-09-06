@@ -38,23 +38,23 @@ import com.starrocks.thrift.TDescribeTableParams;
 import com.starrocks.thrift.TDescribeTableResult;
 import com.starrocks.thrift.TGetDbsParams;
 import com.starrocks.thrift.TGetDbsResult;
-import com.starrocks.thrift.TGetTableMetaRequest;
-import com.starrocks.thrift.TGetTableMetaResponse;
+import com.starrocks.thrift.TGetPartitionsMetaRequest;
+import com.starrocks.thrift.TGetPartitionsMetaResponse;
 import com.starrocks.thrift.TGetTablesInfoRequest;
 import com.starrocks.thrift.TGetTablesInfoResponse;
 import com.starrocks.thrift.TGetTablesParams;
 import com.starrocks.thrift.TGetTablesResult;
 import com.starrocks.thrift.TNetworkAddress;
-import com.starrocks.thrift.TPartitionType;
-import com.starrocks.thrift.TStatusCode;
+import com.starrocks.thrift.TPartitionMetaInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 import static com.starrocks.connector.ConnectorTableId.CONNECTOR_ID_GENERATOR;
 
@@ -180,32 +180,29 @@ public class StarrocksMetadata implements ConnectorMetadata {
                     LOG.warn("call fe {} getTableNames rpc method failed", addr, e);
                     throw new MetaNotFoundException("getTableNames failed from " + addr + ", error: " + e.getMessage());
                 }
-                TGetTableMetaRequest metaRequest = new TGetTableMetaRequest();
-                metaRequest.setDb_name(dbName);
-                metaRequest.setTable_name(tableName);
+
+                TGetPartitionsMetaRequest metaRequest = new TGetPartitionsMetaRequest();
+                TAuthInfo tAuthInfo = new TAuthInfo();
+                tAuthInfo.setUser(remoteFeUsername);
+                tAuthInfo.setUser_ip(FrontendOptions.getLocalHostAddress());
+                metaRequest.setAuth_info(tAuthInfo);
+
                 try {
-                    TGetTableMetaResponse response = FrontendServiceProxy.call(addr,
+                    TGetPartitionsMetaResponse response = FrontendServiceProxy.call(addr,
                             Config.thrift_rpc_timeout_ms,
                             Config.thrift_rpc_retry_times,
-                            client -> client.getTableMeta(metaRequest));
-                    if (response.status.getStatus_code() != TStatusCode.OK) {
-                        String errMsg;
-                        if (response.status.getError_msgs() != null) {
-                            errMsg = String.join(",", response.status.getError_msgs());
-                        } else {
-                            errMsg = "";
+                            client -> client.getPartitionsMeta(metaRequest));
+                    Set<String> partitionColumns = new HashSet<>();
+                    if (response != null) {
+                        for (TPartitionMetaInfo partitionInfo : response.partitions_meta_infos) {
+                            if (dbName.equals(partitionInfo.getDb_name()) && tableName.equals(partitionInfo.getTable_name())) {
+                                LOG.info(partitionInfo.getPartition_key());
+                                partitionColumns.add(partitionInfo.getPartition_key());
+                            }
                         }
-                        LOG.warn("get TableMeta failed: {}", errMsg);
-                        throw new MetaNotFoundException(errMsg);
-                    } else {
-                        List<String> partitionColumns = new ArrayList<>();
-                        if (response.getTable_meta().getPartition_info().type == TPartitionType.RANGE_PARTITIONED) {
-                            partitionColumns = response.getTable_meta().getPartition_info().getRange_partition_desc()
-                                    .getColumns().stream().map(desc -> desc.columnName).collect(Collectors.toList());
-                        }
-                        return new StarrocksTable(remoteFeHost, remoteFeHttpPort, remoteFeUsername, remoteFePasswd,
-                                catalogName, dbName, tblName, columns, partitionColumns);
                     }
+                    return new StarrocksTable(remoteFeHost, remoteFeHttpPort, remoteFeUsername, remoteFePasswd,
+                            catalogName, dbName, tblName, columns, new ArrayList<>(partitionColumns));
                 } catch (Exception e) {
                     LOG.warn("call fe {} refreshTable rpc method failed", addr, e);
                     throw new MetaNotFoundException("get TableMeta failed from " + addr + ", error: " + e.getMessage());

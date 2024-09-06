@@ -531,6 +531,21 @@ public class AnalyzeExprTest {
     }
 
     @Test
+    public void testMapAgg() {
+        analyzeSuccess("select map_agg(1, 2)");
+        analyzeSuccess("select map(1, [])");
+        analyzeSuccess("select map('a', row(1, 2))");
+        analyzeSuccess("select map('abc', row(1, 2))");
+        analyzeSuccess("select map(cast('2020-02-20' as date), row(1, 2))");
+        analyzeSuccess("select map(cast('2020-02-20' as datetime), row(1, 2))");
+
+        analyzeFail("select map([], 123)");
+        analyzeFail("select map(row(1,2,3), 123)");
+        analyzeFail("select map(map(1,2), 123)");
+        analyzeFail("select map(parse_json('{\"a\": 1}'), map(1,2))");
+    }
+
+    @Test
     public void testNgramSearch() {
         analyzeFail("select ngram_search('abc', 'a')");
         analyzeFail("select ngram_search(date('2020-06-23'), \"2020\", 4);");
