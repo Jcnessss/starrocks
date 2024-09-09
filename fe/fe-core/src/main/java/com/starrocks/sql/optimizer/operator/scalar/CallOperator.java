@@ -147,6 +147,22 @@ public class CallOperator extends ScalarOperator {
     }
 
     @Override
+    public String toSql() {
+        if (fnName.equalsIgnoreCase(FunctionSet.ADD)) {
+            return getChild(0).toSql() + " + " + getChild(1).toSql();
+        } else if (fnName.equalsIgnoreCase(FunctionSet.SUBTRACT)) {
+            return getChild(0).toSql() + " - " + getChild(1).toSql();
+        } else if (fnName.equalsIgnoreCase(FunctionSet.MULTIPLY)) {
+            return getChild(0).toSql() + " * " + getChild(1).toSql();
+        } else if (fnName.equalsIgnoreCase(FunctionSet.DIVIDE)) {
+            return getChild(0).toSql() + " / " + getChild(1).toSql();
+        }
+
+        return fnName + "(" + arguments.stream().map(ScalarOperator::toSql).collect(Collectors.joining(", ")) +
+                ")";
+    }
+
+    @Override
     public List<ScalarOperator> getChildren() {
         return arguments;
     }

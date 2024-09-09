@@ -65,6 +65,11 @@ public class CastOperator extends CallOperator {
     }
 
     @Override
+    public String toSql() {
+        return "cast(" + getChild(0).toSql() + " as " + getType().toSql() + ")";
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

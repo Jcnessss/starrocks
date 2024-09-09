@@ -74,6 +74,20 @@ public class BetweenPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String toSql() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getChild(0).toSql()).append(" ");
+
+        if (isNotBetween()) {
+            sb.append("NOT ");
+        }
+
+        sb.append("BETWEEN ");
+        sb.append(getChild(1)).append(" AND ").append(getChild(2));
+        return sb.toString();
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

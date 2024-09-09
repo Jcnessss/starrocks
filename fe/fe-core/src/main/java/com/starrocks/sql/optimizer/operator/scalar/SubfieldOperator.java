@@ -112,6 +112,11 @@ public class SubfieldOperator extends ScalarOperator {
     }
 
     @Override
+    public String toSql() {
+        return String.format("Subfield([%s], \"%s\")", getChild(0).toSql(), Joiner.on('.').join(fieldNames));
+    }
+
+    @Override
     public int hashCode() {
         return Objects.hash(getChild(0), fieldNames, copyFlag);
     }

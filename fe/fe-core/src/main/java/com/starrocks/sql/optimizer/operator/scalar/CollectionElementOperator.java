@@ -67,6 +67,11 @@ public class CollectionElementOperator extends ScalarOperator {
     }
 
     @Override
+    public String toSql() {
+        return arguments.get(0).toSql() + "[" + arguments.get(1).toSql() + "]";
+    }
+
+    @Override
     public ColumnRefSet getUsedColumns() {
         ColumnRefSet used = new ColumnRefSet();
         for (ScalarOperator child : arguments) {

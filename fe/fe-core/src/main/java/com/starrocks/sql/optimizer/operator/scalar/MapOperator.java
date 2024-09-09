@@ -62,6 +62,11 @@ public class MapOperator extends ScalarOperator {
     }
 
     @Override
+    public String toSql() {
+        return "map(" + arguments.get(0).toSql() + ", " +  arguments.get(1).toSql() + ")";
+    }
+
+    @Override
     public ColumnRefSet getUsedColumns() {
         ColumnRefSet usedColumns = new ColumnRefSet();
         arguments.forEach(arg -> usedColumns.union(arg.getUsedColumns()));
