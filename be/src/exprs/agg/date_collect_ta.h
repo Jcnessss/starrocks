@@ -85,7 +85,6 @@ class DateCollectFunction final
         : public AggregateFunctionBatchHelper<DateCollectState, DateCollectFunction> {
 public:
 
-
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         if ((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()) {

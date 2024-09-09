@@ -26,8 +26,10 @@ namespace starrocks {
 StarrocksScanReader::StarrocksScanReader(const std::string& remote_be_host, const std::string& remote_be_port,
                                          const std::string& username, const std::string& passwd,
                                          const std::string& query_plan, const std::string& table,
-                                         const std::string& database, const std::vector<long> tablet_ids)
-        : _remote_be_host(remote_be_host),
+                                         const std::string& database, const std::vector<long> tablet_ids,
+                                         const int batch_size)
+        : _batch_size(batch_size),
+          _remote_be_host(remote_be_host),
           _remote_be_port(remote_be_port),
           _username(username),
           _passwd(passwd),
@@ -37,7 +39,6 @@ StarrocksScanReader::StarrocksScanReader(const std::string& remote_be_host, cons
           _tablet_ids(tablet_ids) {
     _timeout_ms = 30000;
     _offset = 0;
-    _batch_size = 4096;
 }
 
 StarrocksScanReader::~StarrocksScanReader() = default;
@@ -51,6 +52,8 @@ Status StarrocksScanReader::open() {
     tScanOpenParams.__set_tablet_ids(_tablet_ids);
     tScanOpenParams.__set_opaqued_query_plan(_query_plan);
     tScanOpenParams.__set_batch_size(_batch_size);
+    tScanOpenParams.__set_mem_limit(-1);
+    tScanOpenParams.__set_query_timeout(3600);
     TScanOpenResult tScanOpenResult;
     ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
             _remote_be_host, std::stoi(_remote_be_port),
@@ -65,7 +68,7 @@ Status StarrocksScanReader::open() {
     return Status(tScanOpenResult.status);
 }
 
-Status StarrocksScanReader::get_next(std::shared_ptr<arrow::RecordBatch>* record_batch) {
+Status StarrocksScanReader::get_next() {
     TScanNextBatchParams tScanNextBatchParams;
     tScanNextBatchParams.__set_context_id(_context_id);
     tScanNextBatchParams.__set_offset(_offset);
@@ -82,8 +85,11 @@ Status StarrocksScanReader::get_next(std::shared_ptr<arrow::RecordBatch>* record
     if (tScanBatchResult.eos) {
         return Status::EndOfFile("");
     }
-    deserialize_record_batch(record_batch, tScanBatchResult.rows);
-    _offset += record_batch->get()->num_rows();
+    _batch.reset();
+    _rows.reset();
+    _rows = std::make_shared<std::string>(tScanBatchResult.rows);
+    deserialize_record_batch(&_batch, *_rows.get());
+    _offset += _batch->num_rows();
     return Status::OK();
 }
 

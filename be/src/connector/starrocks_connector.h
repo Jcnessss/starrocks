@@ -83,7 +83,6 @@ private:
     RuntimeState* _runtime_state = nullptr;
     StarrocksScanReader* _reader = nullptr;
     bool _no_data = false;
-    std::shared_ptr<arrow::RecordBatch> _batch;
     std::vector<std::unique_ptr<ConvertFuncTree>> _conv_funcs;
     std::vector<Expr*> _cast_exprs;
     ArrowConvertContext _conv_ctx;

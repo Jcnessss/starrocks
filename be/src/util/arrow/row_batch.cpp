@@ -237,7 +237,6 @@ Status deserialize_record_batch(std::shared_ptr<arrow::RecordBatch>* record_batc
         msg << "No record batch found, reason: " << record_res.status().ToString();
         return Status::InternalError(msg.str());
     }
-    LOG(INFO) << record_res.ValueOrDie()->num_rows();
     *record_batch = record_res.ValueOrDie();
     return Status::OK();
 }

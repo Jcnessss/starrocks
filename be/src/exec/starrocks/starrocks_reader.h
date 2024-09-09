@@ -23,12 +23,16 @@ public:
     StarrocksScanReader(const std::string& remote_be_host, const std::string& remote_be_port,
                         const std::string& username, const std::string& passwd,
                         const std::string& query_plan, const std::string& table,
-                        const std::string& database, const std::vector<long> tablet_ids);
+                        const std::string& database, const std::vector<long> tablet_ids,
+                        const int batch_size);
     ~StarrocksScanReader();
 
     Status open();
-    Status get_next(std::shared_ptr<arrow::RecordBatch>* record_batch);
+    Status get_next();
     Status close();
+    std::shared_ptr<arrow::RecordBatch> get_batch() const {
+        return _batch;
+    }
 
     std::vector<TScanColumnDesc> _selected_fields;
     int _batch_size;
@@ -44,6 +48,8 @@ private:
     int _timeout_ms;
     std::string _context_id;
     int64_t _offset;
+    std::shared_ptr<arrow::RecordBatch> _batch;
+    std::shared_ptr<std::string> _rows;
 };
 
 }

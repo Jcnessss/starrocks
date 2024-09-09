@@ -14,6 +14,8 @@
 
 #include "starrocks_connector.h"
 
+#include <arrow/array/array_binary.h>
+
 #include "column/column_helper.h"
 #include "connector.h"
 #include "exprs/cast_expr.h"
@@ -72,7 +74,7 @@ Status StarrocksDataSource::get_next(RuntimeState* state, ChunkPtr* chunk) {
         return Status::EndOfFile("no data");
     }
     ChunkPtr tmp_chunk;
-    RETURN_IF_ERROR(_reader->get_next(&_batch));
+    RETURN_IF_ERROR(_reader->get_next());
     RETURN_IF_ERROR(initialize_src_chunk(&tmp_chunk));
     RETURN_IF_ERROR(append_batch_to_src_chunk(&tmp_chunk));
     RETURN_IF_ERROR(finalize_src_chunk(&tmp_chunk));
@@ -89,7 +91,8 @@ Status StarrocksDataSource::_create_scanner() {
             _provider->_starrocks_scan_node.query_plan,
             _provider->_starrocks_scan_node.table_name,
             _provider->_starrocks_scan_node.database,
-            _scan_range.tablet_ids));
+            _scan_range.tablet_ids,
+            _runtime_state->chunk_size()));
     RETURN_IF_ERROR(_reader->open());
     return Status::OK();
 }
@@ -109,11 +112,11 @@ Status StarrocksDataSource::initialize_src_chunk(ChunkPtr* chunk) {
         if (slot_desc == nullptr) {
             continue;
         }
-        auto* array = _batch->column(column_pos++).get();
+        auto* array = _reader->get_batch()->column(column_pos++).get();
         ColumnPtr column;
         RETURN_IF_ERROR(new_column(array->type().get(), slot_desc, &column, _conv_funcs[i].get(), &_cast_exprs[i],
-                                   _pool, false));
-        column->reserve(_batch->num_rows());
+                                   _pool, true));
+        column->reserve(_reader->get_batch()->num_rows());
         (*chunk)->append_column(column, slot_desc->id());
     }
     return Status::OK();
@@ -127,7 +130,7 @@ Status StarrocksDataSource::append_batch_to_src_chunk(ChunkPtr* chunk) {
             continue;
         }
         _conv_ctx.current_slot = slot_desc;
-        auto* array = _batch->column(column_pos++).get();
+        auto* array = _reader->get_batch()->column(column_pos++).get();
         auto& column = (*chunk)->get_column_by_slot_id(slot_desc->id());
         // for timestamp type, _state->timezone which is specified by user. convert function
         // obtains timezone from array. thus timezone in array should be rectified to
@@ -137,7 +140,7 @@ Status StarrocksDataSource::append_batch_to_src_chunk(ChunkPtr* chunk) {
             auto& mutable_timezone = (std::string&)timestamp_type->timezone();
             mutable_timezone = _runtime_state->timezone();
         }
-        RETURN_IF_ERROR(convert_array_to_column(_conv_funcs[i].get(), _batch->num_rows(), array, column, 0,
+        RETURN_IF_ERROR(convert_array_to_column(_conv_funcs[i].get(), _reader->get_batch()->num_rows(), array, column, 0,
                                                 0, &_chunk_filter, &_conv_ctx));
     }
 
