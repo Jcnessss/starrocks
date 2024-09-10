@@ -15,11 +15,16 @@
 package com.starrocks.connector.sr;
 
 import com.google.common.collect.ImmutableList;
+import com.starrocks.catalog.ArrayType;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.MapType;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PrimitiveType;
+import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.StarrocksTable;
+import com.starrocks.catalog.StructField;
+import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
@@ -46,6 +51,7 @@ import com.starrocks.thrift.TGetTablesParams;
 import com.starrocks.thrift.TGetTablesResult;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TPartitionMetaInfo;
+import com.starrocks.thrift.TPrimitiveType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -169,8 +175,24 @@ public class StarrocksMetadata implements ConnectorMetadata {
                             String fieldName = columnSchema.getColumnDesc().columnName;
                             boolean isKey = columnSchema.getColumnDesc().isKey();
                             String comment = columnSchema.getComment();
-                            Type fieldType = Type.fromPrimitiveType(
-                                    PrimitiveType.fromThrift(columnSchema.getColumnDesc().getColumnType()));
+                            Type fieldType;
+                            if (columnSchema.getColumnDesc().getColumnType() == TPrimitiveType.DECIMALV2) {
+                                fieldType = ScalarType.createDecimalV2Type(columnSchema.getColumnDesc().columnPrecision,
+                                        columnSchema.getColumnDesc().columnScale);
+                            } else if (columnSchema.getColumnDesc().getColumnType() == TPrimitiveType.DECIMAL32 ||
+                                    columnSchema.getColumnDesc().getColumnType() == TPrimitiveType.DECIMAL64 ||
+                                    columnSchema.getColumnDesc().getColumnType() == TPrimitiveType.DECIMAL128) {
+                                PrimitiveType decimalType =
+                                        PrimitiveType.fromThrift(columnSchema.getColumnDesc().getColumnType());
+                                fieldType = ScalarType.createDecimalV3Type(decimalType,
+                                        columnSchema.getColumnDesc().columnPrecision,
+                                        columnSchema.getColumnDesc().columnScale);
+                            } else if (columnSchema.getColumnDesc().getColumnType() != TPrimitiveType.INVALID_TYPE) {
+                                fieldType = Type.fromPrimitiveType(
+                                        PrimitiveType.fromThrift(columnSchema.getColumnDesc().getColumnType()));
+                            } else {
+                                fieldType = parseTypeFromStr(columnSchema.getColumnDesc().getColumnTypeStr().toLowerCase());
+                            }
                             Column column = new Column(fieldName, fieldType, isKey,
                                     null, columnSchema.getColumnDesc().allowNull, null, comment);
                             columns.add(column);
@@ -211,6 +233,30 @@ public class StarrocksMetadata implements ConnectorMetadata {
         }
         LOG.error("Starrocks table {}.{} does not exist.", dbName, tblName);
         return null;
+    }
+
+    private Type parseTypeFromStr(String columnTypeStr) throws Exception {
+        columnTypeStr = columnTypeStr.replaceAll("\\(\\d+\\)", "");
+        String[] splits = columnTypeStr.split("<", 2);
+        if (splits.length < 2) {
+            return ScalarType.createType(columnTypeStr.split(">")[0]);
+        }
+        if (splits[0].equals("struct")) {
+            String structString = splits[1].substring(0, splits[1].length() - 1);
+            ArrayList<StructField> fields = new ArrayList<>();
+            for (String field : structString.split(", ")) {
+                fields.add(new StructField(field.split(" ")[0], parseTypeFromStr(field.split(" ")[1])));
+            }
+            return new StructType(fields);
+        } else if (splits[0].equals("map")) {
+            String mapString = splits[1].substring(0, splits[1].length() - 1);
+            return new MapType(parseTypeFromStr(mapString.split(",")[0]), parseTypeFromStr(mapString.split(",")[1]));
+        } else if (splits[0].equals("array")) {
+            String arrayString = splits[1].substring(0, splits[1].length() - 1);
+            return new ArrayType(parseTypeFromStr(arrayString));
+        } else {
+            throw new MetaNotFoundException("Unknown type from remote starrocks");
+        }
     }
 
     @Override
