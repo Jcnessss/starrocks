@@ -83,7 +83,7 @@ public class BetweenPredicateOperator extends PredicateOperator {
         }
 
         sb.append("BETWEEN ");
-        sb.append(getChild(1)).append(" AND ").append(getChild(2));
+        sb.append(getChild(1).toSql()).append(" AND ").append(getChild(2).toSql());
         return sb.toString();
     }
 

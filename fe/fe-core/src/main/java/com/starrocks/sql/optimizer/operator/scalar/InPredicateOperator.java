@@ -87,7 +87,7 @@ public class InPredicateOperator extends PredicateOperator {
     @Override
     public String toSql() {
         StringBuilder sb = new StringBuilder();
-        sb.append(getChild(0)).append(" ");
+        sb.append(getChild(0).toSql()).append(" ");
         if (isNotIn) {
             sb.append("NOT ");
         }

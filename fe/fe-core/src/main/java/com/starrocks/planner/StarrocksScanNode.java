@@ -88,12 +88,12 @@ public class StarrocksScanNode extends ScanNode {
 
             JSONObject partitionsObject = jsonObject.getJSONObject("partitions");
             List<Long> nodeIds = getAllAvailableBackendOrComputeIds();
+            queryPlan = jsonObject.getString("opaqued_query_plan");
             int index = 0;
             for (String tabletKey : partitionsObject.keySet()) {
                 JSONObject tabletObject = partitionsObject.getJSONObject(tabletKey);
                 if (tabletObject.getJSONArray("routings").length() != 0) {
                     String[] tmp = tabletObject.getJSONArray("routings").getString(0).split(":");
-                    queryPlan = jsonObject.getString("opaqued_query_plan");
 
                     TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
                     TScanRange scanRange = new TScanRange();
