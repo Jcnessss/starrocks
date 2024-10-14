@@ -30,7 +30,6 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.rpc.FrontendServiceProxy;
-import com.starrocks.service.FrontendOptions;
 import com.starrocks.sql.common.MetaNotFoundException;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -94,7 +93,7 @@ public class StarrocksMetadata implements ConnectorMetadata {
         TNetworkAddress addr = new TNetworkAddress(remoteFeHost, Integer.parseInt(remoteFeRpcPort));
         TGetDbsParams request = new TGetDbsParams();
         request.setUser(remoteFeUsername);
-        request.setUser_ip(FrontendOptions.getLocalHostAddress());
+        request.setUser_ip("%");
         try {
             TGetDbsResult response = FrontendServiceProxy.call(addr,
                     Config.thrift_rpc_timeout_ms,
@@ -119,7 +118,7 @@ public class StarrocksMetadata implements ConnectorMetadata {
         TGetTablesParams request = new TGetTablesParams();
         request.setDb(dbName);
         request.setUser(remoteFeUsername);
-        request.setUser_ip(FrontendOptions.getLocalHostAddress());
+        request.setUser_ip("%");
         try {
             TGetTablesResult response = FrontendServiceProxy.call(addr,
                     Config.thrift_rpc_timeout_ms,
@@ -159,7 +158,7 @@ public class StarrocksMetadata implements ConnectorMetadata {
                 request.setDb(dbName);
                 request.setTable_name(tblName);
                 request.setUser(remoteFeUsername);
-                request.setUser_ip(FrontendOptions.getLocalHostAddress());
+                request.setUser_ip("%");
                 try {
                     TDescribeTableResult response = FrontendServiceProxy.call(addr,
                             Config.thrift_rpc_timeout_ms,
@@ -206,7 +205,7 @@ public class StarrocksMetadata implements ConnectorMetadata {
                 TGetPartitionsMetaRequest metaRequest = new TGetPartitionsMetaRequest();
                 TAuthInfo tAuthInfo = new TAuthInfo();
                 tAuthInfo.setUser(remoteFeUsername);
-                tAuthInfo.setUser_ip(FrontendOptions.getLocalHostAddress());
+                tAuthInfo.setUser_ip("%");
                 metaRequest.setAuth_info(tAuthInfo);
 
                 try {
@@ -218,7 +217,6 @@ public class StarrocksMetadata implements ConnectorMetadata {
                     if (response != null) {
                         for (TPartitionMetaInfo partitionInfo : response.partitions_meta_infos) {
                             if (dbName.equals(partitionInfo.getDb_name()) && tableName.equals(partitionInfo.getTable_name())) {
-                                LOG.info(partitionInfo.getPartition_key());
                                 partitionColumns.add(partitionInfo.getPartition_key());
                             }
                         }
@@ -275,7 +273,7 @@ public class StarrocksMetadata implements ConnectorMetadata {
         TGetTablesInfoRequest request = new TGetTablesInfoRequest();
         TAuthInfo tAuthInfo = new TAuthInfo();
         tAuthInfo.setUser(remoteFeUsername);
-        tAuthInfo.setUser_ip(FrontendOptions.getLocalHostAddress());
+        tAuthInfo.setUser_ip("%");
         request.setAuth_info(tAuthInfo);
         request.setTable_name(table.getName());
         try {
