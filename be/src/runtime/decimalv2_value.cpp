@@ -338,6 +338,10 @@ std::string DecimalV2Value::to_string() const {
 }
 
 int DecimalV2Value::to_string(char* buff) const {
+   return to_string(buff,SCALE);
+}
+
+int DecimalV2Value::to_string(char* buff,int scale) const {
     int len = 0;
     int128_t abs_value = _value;
     if (_value < 0) {
@@ -354,7 +358,7 @@ int DecimalV2Value::to_string(char* buff) const {
     // If SCALE = 9, lower is 6, upper is 7
     int lower = 0;
     int remainder = 0;
-    while ((lower < SCALE) && (remainder = scale_part % 10) == 0) {
+    while ((lower < scale) && (remainder = scale_part % 10) == 0) {
         lower += 1;
         scale_part = scale_part / 10;
     }
@@ -368,7 +372,7 @@ int DecimalV2Value::to_string(char* buff) const {
             upper += 1;
         }
 
-        for (int i = upper + 1; i < SCALE; i++) {
+        for (int i = upper + 1; i < scale; i++) {
             buff[len++] = '0';
         }
 

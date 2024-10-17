@@ -1326,5 +1326,8 @@ vectorized_functions = [
     [170501, 'named_struct', True, False, 'ANY_STRUCT', ['ANY_ELEMENT', "..."], 'StructFunctions::named_struct'],
 
     # user function
-    [180000, 'is_role_in_session', True, False, 'BOOLEAN', ['VARCHAR'], 'nullptr']
+    [180000, 'is_role_in_session', True, False, 'BOOLEAN', ['VARCHAR'], 'nullptr'],
+
+    # 3xxxx Thinkingdata function
+    [330001, 'get_distribute_group_str', True, False, 'VARCHAR', ['DOUBLE','DOUBLE','BIGINT','BIGINT','DOUBLE'], 'TaFunctions::get_distribute_group_str']
 ]

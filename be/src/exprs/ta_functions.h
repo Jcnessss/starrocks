@@ -19,7 +19,23 @@
 namespace starrocks {
 class TaFunctions {
 public:
+    /**
+     * @param:
+     * @paramType columns: [TYPE_DOUBLE, TYPE_DOUBLE, TYPE_BIGINT, TYPE_DOUBLE, TYPE_DOUBLE]
+     * @return TYPE_VARCHAR
+     */
     DEFINE_VECTORIZED_FN(get_distribute_group_str);
+
+private:
+    static void get_distribute_group_str_inner(double minVal, double maxVal, int64_t discreteLimit, int64_t number,double statVal, Slice* slice);
+    static void getGroupStr(double statVal, int64_t d, double minVal, double maxVal,Slice* slice);
+    static void getNumLengthAndFirstVal(int64_t num,int* length, int* firstVal);
+    static int64_t  getGroupIndex(double val, int64_t  d);
+    static void doubleToString(double value, Slice* slice);
+    static void multiDoubleToString(double value1,double value2,int precision,Slice* slice);
+    static void leftCommaDoubleToString(double value, starrocks::Slice* slice);
+    static void rightCommaDoubleToString(const double value, starrocks::Slice* slice);
+    static void getSimpleGroupStr(double statVal0, double minVal0, double maxVal0, Slice* pSlice);
 };
 
 } // namespace starrocks

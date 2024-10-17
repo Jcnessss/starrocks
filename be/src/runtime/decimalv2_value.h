@@ -199,6 +199,8 @@ public:
     // Returns the number of bytes copied to |buff|.
     int to_string(char* buff) const;
 
+    int to_string(char* buff,int scale) const;
+
     // Convert string to decimal
     // @param from - value to convert. Doesn't have to be \0 terminated!
     //               will stop at the fist non-digit char(nor '.' 'e' 'E'),
