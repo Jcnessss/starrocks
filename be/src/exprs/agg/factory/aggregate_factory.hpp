@@ -179,7 +179,14 @@ public:
     static AggregateFunctionPtr MakeRetentionAggregateFunction();
     static AggregateFunctionPtr MakeRetentionTaAggregateFunction();
     static AggregateFunctionPtr MakeRetentionLostAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionLostValueAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionLostValueFormulaAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionLostQuotaAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionLostValueQuotaAggregateFunction();
+    static AggregateFunctionPtr MakeRetentionLostValueFormulaQuotaAggregateFunction();
     static AggregateFunctionPtr MakeDateCollectAggregateFunction();
+    static AggregateFunctionPtr MakeDateValueCollectAggregateFunction();
+    static AggregateFunctionPtr MakeDateValueArrayCollectAggregateFunction();
     static AggregateFunctionPtr MakeBooleanOrAggregateFunction();
     static AggregateFunctionPtr MakeFunnelFlowArrayAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();

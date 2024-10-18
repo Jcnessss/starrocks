@@ -258,7 +258,15 @@ public class FunctionSet {
     public static final String RETENTION = "retention";
     public static final String RETENTION_TA = "retention_ta";
     public static final String TA_DATE_COLLECT = "ta_date_collect";
+    public static final String TA_DATE_VALUE_COLLECT = "ta_date_value_collect";
+    public static final String TA_DATE_VALUE_ARRAY_COLLECT = "ta_date_value_array_collect";
     public static final String RETENTION_LOST = "retention_lost_date_collect_agg";
+    public static final String RETENTION_LOST_VALUE = "retention_lost_date_sim_stat_collect_agg";
+    public static final String RETENTION_LOST_VALUE_FORMULA = "retention_lost_date_sim_stat_formula_collect_agg";
+
+    public static final String RETENTION_LOST_QUOTA = "retention_lost_date_quota_array_agg";
+    public static final String RETENTION_LOST_VALUE_QUOTA = "retention_lost_date_sim_stat_quota_array_agg";
+    public static final String RETENTION_LOST_VALUE_FORMULA_QUOTA = "retention_lost_date_sim_stat_formula_quota_array_agg";
 
     public static final String STDDEV = "stddev";
     public static final String STDDEV_POP = "stddev_pop";
@@ -1185,9 +1193,31 @@ public class FunctionSet {
 
         addBuiltin(AggregateFunction.createBuiltin(TA_DATE_COLLECT, Lists.newArrayList(Type.DATE),
                 Type.VARBINARY, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(TA_DATE_VALUE_COLLECT, Lists.newArrayList(Type.DATE, Type.DOUBLE),
+                Type.VARBINARY, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(TA_DATE_VALUE_ARRAY_COLLECT, Lists.newArrayList(Type.DATE, Type.ARRAY_DOUBLE),
+                Type.VARBINARY, Type.VARBINARY, false, false, false));
         addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST,
                 Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.INT, Type.VARCHAR),
                 Type.JSON, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST_VALUE,
+                Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.VARBINARY, Type.INT, Type.INT, Type.VARCHAR),
+                Type.JSON, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST_VALUE_FORMULA,
+                Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.VARBINARY, Type.ARRAY_INT, Type.INT, Type.VARCHAR, Type.VARCHAR),
+                Type.JSON, Type.VARBINARY, false, false, false));
+        MapType returnType = new MapType(Type.DATETIME, Type.ARRAY_DOUBLE);
+        addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST_QUOTA,
+                Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.ARRAY_VARCHAR, Type.ARRAY_INT, Type.INT, Type.VARCHAR),
+                returnType, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST_VALUE_QUOTA,
+                Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.VARBINARY, Type.INT, Type.ARRAY_VARCHAR,
+                        Type.ARRAY_INT, Type.INT, Type.VARCHAR),
+                returnType, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(RETENTION_LOST_VALUE_FORMULA_QUOTA,
+                Lists.newArrayList(Type.VARBINARY, Type.VARBINARY, Type.VARBINARY, Type.ARRAY_INT,
+                        Type.ARRAY_VARCHAR, Type.ARRAY_INT, Type.INT, Type.VARCHAR, Type.VARCHAR),
+                returnType, Type.VARBINARY, false, false, false));
 
 
 

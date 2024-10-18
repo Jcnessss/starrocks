@@ -23,6 +23,7 @@
 #include "column/column_helper.h"
 #include "column/datum.h"
 #include "column/fixed_length_column.h"
+#include "column/map_column.h"
 #include "column/type_traits.h"
 #include "column/vectorized_fwd.h"
 #include "exprs/agg/aggregate.h"
@@ -36,11 +37,13 @@
 #include "util/slice.h"
 
 namespace starrocks {
-struct RetentionLostState {
+struct RetentionLostQuotaState {
 
-    void init(int time_unit_num, std::string time_unit) {
+    void init(int time_unit_num, std::string time_unit, std::vector<std::string> quota_types, std::vector<int> days) {
         _time_unit_num = time_unit_num;
         _time_unit = std::move(time_unit);
+        _quota_types = std::move(quota_types);
+        _days = std::move(days);
         _is_init = true;
         if (_time_unit == "day") {
             max_month_diff = time_unit_num / 28 + 1;
@@ -54,6 +57,9 @@ struct RetentionLostState {
     void update(const BinaryColumn* init_column, const BinaryColumn* return_column, size_t row_num) {
         Slice init = init_column->get(row_num).get_slice();
         Slice return_date = return_column->get(row_num).get_slice();
+        if (init.size == 0) {
+            return ;
+        }
         std::map<int, std::vector<DateValue>> init_dates;
         parse_init_dates(init, &init_dates);
         std::unordered_map<int, bool> is_found;
@@ -217,52 +223,45 @@ struct RetentionLostState {
         return std::abs(diff);
     }
 
-    void finalize_to_json_column(JsonColumn* json_column, cctz::time_zone time_zone) const {
-        int64_t offset = 0;
-        TimezoneUtils::timezone_offsets("UTC", time_zone.name() , &offset);
-        vpack::Builder root;
-        root.openObject();
-        vpack::Builder retention;
-        retention.openObject();
+    void finalize_to_map_column(MapColumn* map_column) const {
+        auto* time_column = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(map_column->keys_column().get()));
+        auto* array_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(map_column->values_column().get()));
+        auto* element_column = down_cast<DoubleColumn*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        auto map_offsets = map_column->offsets().get_data();
+        auto array_offsets = array_column->offsets().get_data();
         for (const auto& row : res) {
-            vpack::Builder builder_array;
-            builder_array.openArray();
-            for (int i = 1; i < _time_unit_num + 3; i++) {
-                builder_array.add(vpack::Value(row[i]));
-            }
-            builder_array.close();
             DateValue v;
             v.set_julian(row[0]);
             TimestampValue timestamp_value;
             int y, m, d;
             v.to_date(&y, &m, &d);
             timestamp_value.from_timestamp(y, m, d, 0, 0, 0, 0);
-            retention.add(std::to_string((timestamp_value.to_unix_second() - offset) * 1000), builder_array.slice());
-        }
-        retention.close();
-        root.add("0", retention.slice());
-        vpack::Builder lost;
-        lost.openObject();
-        for (const auto& row : res) {
-            vpack::Builder builder_array;
-            builder_array.openArray();
-            for (int i = _time_unit_num + 3; i < row.size(); i++) {
-                builder_array.add(vpack::Value(row[i]));
+            time_column->get_data().emplace_back(timestamp_value);
+            if (map_column->keys_column()->is_nullable()) {
+                down_cast<NullableColumn*>(map_column->keys_column().get())->null_column()->append(0);
             }
-            builder_array.close();
-            DateValue v;
-            v.set_julian(row[0]);
-            TimestampValue timestamp_value;
-            int y, m, d;
-            v.to_date(&y, &m, &d);
-            timestamp_value.from_timestamp(y, m, d, 0, 0, 0, 0);
-            lost.add(std::to_string((timestamp_value.to_unix_second() - offset) * 1000), builder_array.slice());
+            for (int i = 0; i < _quota_types.size(); i++) {
+                if (_quota_types[i] == "RETENTION_NUM") {
+                    element_column->get_data().emplace_back(row[2 + _days[i]]);
+                } else if (_quota_types[i] == "RETENTION_RATE") {
+                    element_column->get_data().emplace_back(row[0] != 0 ? row[2 + _days[i]] / row[0] : 0);
+                } else if (_quota_types[i] == "LOST_NUM") {
+                    element_column->get_data().emplace_back(row[3 + _days[i] + _time_unit_num]);
+                } else if (_quota_types[i] == "LOST_RATE") {
+                    element_column->get_data().emplace_back(row[0] != 0 ? row[3 + _days[i] + _time_unit_num] / row[0] : 0);
+                } else {
+                    element_column->get_data().emplace_back(0);
+                }
+                if (array_column->elements_column()->is_nullable()) {
+                    down_cast<NullableColumn*>(array_column->elements_column().get())->null_column()->append(0);
+                }
+            }
+            array_column->offsets_column()->append(array_column->offsets().get_data().back() + _quota_types.size());
+            if (map_column->values_column()->is_nullable()) {
+                down_cast<NullableColumn*>(map_column->values_column().get())->null_column()->append(0);
+            }
         }
-        lost.close();
-        root.add("1", lost.slice());
-        root.close();
-        JsonValue json(root.slice());
-        json_column->append(json);
+        map_column->offsets_column()->append(map_offsets.back() + res.size());
     }
 
     int week(DateValue v) {
@@ -294,16 +293,19 @@ struct RetentionLostState {
                                             (1UL << 11) - 1, (1UL << 10) - 1, (1UL << 9) - 1, (1UL << 8) - 1, (1UL << 7) - 1,
                                             (1UL << 6) - 1, (1UL << 5) - 1, (1UL << 4) - 1, (1UL << 3) - 1, (1UL << 2) - 1, (1UL << 1) - 1};
 
+
     int _time_unit_num;
     std::string _time_unit;
+    std::vector<std::string> _quota_types;
+    std::vector<int> _days;
     bool _is_init = false;
     int max_month_diff;
     std::vector<std::vector<int32_t>> res;
     std::unordered_map<int32_t, int> date_to_index;
 };
 
-class RetentionLostAggregateFunction final
-        : public AggregateFunctionBatchHelper<RetentionLostState, RetentionLostAggregateFunction> {
+class RetentionLostQuotaAggregateFunction final
+        : public AggregateFunctionBatchHelper<RetentionLostQuotaState, RetentionLostQuotaAggregateFunction> {
 public:
 
     void init_state_if_necessary(FunctionContext* ctx, AggDataPtr __restrict state) const {
@@ -311,9 +313,25 @@ public:
             return;
         }
         int constant_num = ctx->get_num_constant_columns();
+        auto column = ctx->get_constant_column(constant_num - 4);
+        auto* array_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column.get()));
+        auto offsets = array_column->offsets();
+        auto varchar_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        std::vector<std::string> quota_types;
+        for (int i = 0 ; i < offsets.get_data()[1]; i++) {
+            quota_types.emplace_back(varchar_column->get_data()[i].to_string());
+        }
+        auto column2 = ctx->get_constant_column(constant_num - 3);
+        auto array_column2 = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column2.get()));
+        auto int_offsets = array_column2->offsets();
+        auto int_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(array_column2->elements_column().get()));
+        std::vector<int> days;
+        for (int i = 0 ; i < int_column->size(); i++) {
+            days.emplace_back(int_column->get_data()[i]);
+        }
         auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 2));
         auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
-        this->data(state).init(time_unit_num, time_unit.to_string());
+        this->data(state).init(time_unit_num, time_unit.to_string(), quota_types, days);
     }
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
@@ -360,8 +378,8 @@ public:
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        auto* json_column = down_cast<JsonColumn*>(ColumnHelper::get_data_column(to));
-        this->data(state).finalize_to_json_column(json_column, ctx->state()->timezone_obj());
+        auto* map_column = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
+        this->data(state).finalize_to_map_column(map_column);
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
@@ -370,24 +388,47 @@ public:
         dst_column->reserve(chunk_size);
 
         int constant_num = ctx->get_num_constant_columns();
+        auto column = ctx->get_constant_column(constant_num - 4);
+        auto* array_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column.get()));
+        auto offsets = array_column->offsets();
+        auto varchar_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        std::vector<std::string> quota_types;
+        for (int i = 0 ; i < offsets.get_data()[1]; i++) {
+            quota_types.emplace_back(varchar_column->get_data()[i].to_string());
+        }
+        auto column2 = ctx->get_constant_column(constant_num - 3);
+        auto array_column2 = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column2.get()));
+        auto int_offsets = array_column2->offsets();
+        auto int_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(array_column2->elements_column().get()));
+        std::vector<int> days;
+        for (int i = 0 ; i < int_column->size(); i++) {
+            days.emplace_back(int_column->get_data()[i]);
+        }
         auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 2));
         auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
 
         const auto* init_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[0].get()));
         const auto* return_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[1].get()));
         for (size_t i = 0; i < chunk_size; ++i) {
-            RetentionLostState state;
-            state.init(time_unit_num, time_unit.to_string());
+            RetentionLostQuotaState state;
+            state.init(time_unit_num, time_unit.to_string(), quota_types, days);
             state.update(init_column, return_column, i);
             serialize_state(state, dst_column);
         }
     }
 
-    void serialize_state(const RetentionLostState& state, BinaryColumn* dst) const {
+    void serialize_state(const RetentionLostQuotaState& state, BinaryColumn* dst) const {
         Bytes& bytes = dst->get_bytes();
         const size_t old_size = bytes.size();
         int64_t total_size = 0;
         size_t offset = bytes.size();
+        if (state.res.size() == 0) {
+            bytes.resize(old_size + sizeof(size_t));
+            size_t size = 0;
+            std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+            dst->get_offset().emplace_back(old_size + sizeof(size_t));
+            return;
+        }
         total_size += sizeof(size_t);
         total_size += sizeof(int32_t) * state.res.size() * state.res[0].size();
         const size_t new_size = old_size + total_size;
@@ -404,7 +445,7 @@ public:
         dst->get_offset().emplace_back(new_size);
     }
 
-    std::string get_name() const override { return "retention_lost_date_collect_agg"; }
+    std::string get_name() const override { return "retention_lost_date_quota_array_agg"; }
 };
 
 } // namespace starrocks

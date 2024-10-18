@@ -92,6 +92,7 @@ import com.starrocks.sql.ast.UnionRelation;
 import com.starrocks.sql.ast.UnitIdentifier;
 import com.starrocks.sql.ast.ValueList;
 import com.starrocks.sql.ast.ValuesRelation;
+import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
 import com.starrocks.sql.parser.ParsingException;
 import io.trino.sql.tree.AliasedRelation;
 import io.trino.sql.tree.AllColumns;
@@ -723,16 +724,25 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
     @Override
     protected ParseNode visitFunctionCall(FunctionCall node, ParseTreeContext context) {
         if (node.getFilter().isPresent()) {
-            if (node.getArguments().size() == 1) {
+            for (int i = 0; i < node.getArguments().size(); i++) {
                 List<Expression> ifArgs = new ArrayList<>();
                 ifArgs.add(node.getFilter().get());
-                ifArgs.add(node.getArguments().get(0));
+                ifArgs.add(node.getArguments().get(i));
                 ifArgs.add(new io.trino.sql.tree.NullLiteral());
                 io.trino.sql.tree.QualifiedName ifName = io.trino.sql.tree.QualifiedName.of("if");
                 Expression replace = new FunctionCall(ifName, ifArgs);
 
-                node.getArguments().clear();
-                node.getArguments().add(replace);
+                node.getArguments().set(i, replace);
+            }
+            if (node.getArguments().size() == 0) {
+                List<Expression> ifArgs = new ArrayList<>();
+                ifArgs.add(node.getFilter().get());
+                ifArgs.add(BooleanLiteral.FALSE_LITERAL);
+                ifArgs.add(new io.trino.sql.tree.NullLiteral());
+                io.trino.sql.tree.QualifiedName ifName = io.trino.sql.tree.QualifiedName.of("if");
+                Expression replace = new FunctionCall(ifName, ifArgs);
+
+                node.getArguments().set(0, replace);
             }
         }
         List<Expr> arguments = visit(node.getArguments(), context, Expr.class);

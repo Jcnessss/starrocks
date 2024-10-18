@@ -32,26 +32,28 @@
 #include "gutil/casts.h"
 #include "runtime/mem_pool.h"
 #include "thrift/protocol/TJSONProtocol.h"
+#include "util/exprtk.hpp"
 #include "util/phmap/phmap_dump.h"
 #include "util/slice.h"
 
 namespace starrocks {
-struct RetentionLostState {
 
-    void init(int time_unit_num, std::string time_unit) {
+struct RetentionLostValueFormulaState {
+
+    void init(int time_unit_num, std::string time_unit, std::vector<int> compute_type, std::string formula_string) {
         _time_unit_num = time_unit_num;
         _time_unit = std::move(time_unit);
+        _compute_type = std::move(compute_type);
+        formula = std::move(formula_string);
         _is_init = true;
-        if (_time_unit == "day") {
-            max_month_diff = time_unit_num / 28 + 1;
-        } else if (_time_unit == "week") {
-            max_month_diff = time_unit_num / 4 + 1;
-        } else if (_time_unit == "month") {
-            max_month_diff = time_unit_num;
-        }
     }
 
-    void update(const BinaryColumn* init_column, const BinaryColumn* return_column, size_t row_num) {
+    void update(const BinaryColumn* init_column, const BinaryColumn* return_column, const BinaryColumn* value_column,
+                size_t row_num) {
+        if (value_num == 0) {
+            value_num = _compute_type.size();
+        }
+        phmap::flat_hash_map<int32_t, std::vector<double>> date_to_value;
         Slice init = init_column->get(row_num).get_slice();
         Slice return_date = return_column->get(row_num).get_slice();
         std::map<int, std::vector<DateValue>> init_dates;
@@ -79,9 +81,6 @@ struct RetentionLostState {
             uint32_t bitmap = date & split;
             if (year_month < it->first) {
                 continue ;
-            }
-            while (it != init_dates.end() && year_month > it->first + max_month_diff) {
-                it++;
             }
             if (it == init_dates.end()) {
                 break;
@@ -111,6 +110,24 @@ struct RetentionLostState {
                                 }
                             }
                             is_found[key] = true;
+                            if (date_to_value.empty()) {
+                                deserialize_values(value_column->get(row_num).get_slice(), &date_to_value);
+                            }
+                            for (int k = 0; k < value_num; k++) {
+                                if (_compute_type[k] > 2) {
+                                    for (int j = diff; j < _time_unit_num + 1; j++) {
+                                        if (date_to_value[v.julian()].size() != 0) {
+                                            sum[date_to_index[init_date.julian()]][j + k * (1 + _time_unit_num)] +=
+                                                    date_to_value[v.julian()][k];
+                                        }
+                                    }
+                                } else {
+                                    if (date_to_value[v.julian()].size() != 0) {
+                                        sum[date_to_index[init_date.julian()]][diff + k * (1 + _time_unit_num)] +=
+                                                date_to_value[v.julian()][k];
+                                    }
+                                }
+                            }
                         }
                     }
                     tmp_it++;
@@ -118,6 +135,33 @@ struct RetentionLostState {
                 pre_date = v;
                 bitmap &= bool_values[day - 1];
             }
+        }
+    }
+
+    void deserialize_values(Slice serialized, phmap::flat_hash_map<int32_t, std::vector<double>>* date_to_value) {
+        if (serialized.size == 0) {
+            return;
+        }
+        size_t offset = 0;
+        size_t size;
+        std::memcpy(&size, serialized.data + offset, sizeof(size_t));
+        if (size == 0) {
+            return;
+        }
+        offset += sizeof(size_t);
+        offset += sizeof(size_t);
+        for (int i = 0; i < size; i++) {
+            int32_t date;
+            std::memcpy(&date, serialized.data + offset, sizeof(int32_t));
+            offset += sizeof(int32_t);
+            std::vector<double> value_array;
+            for (int j = 0; j < value_num; j++) {
+                double value;
+                std::memcpy(&value, serialized.data + offset, sizeof(double));
+                offset += sizeof(double);
+                value_array.emplace_back(value);
+            }
+            date_to_value->emplace(date, value_array);
         }
     }
 
@@ -157,7 +201,10 @@ struct RetentionLostState {
                     for (int j = 3 + _time_unit_num; j < row.size(); j++) {
                         row[j] = 1;
                     }
+                    std::vector<double> sum_row;
+                    sum_row.resize(value_num * (1 + _time_unit_num));
                     res.insert(res.begin() + index, row);
+                    sum.insert(sum.begin() + index, sum_row);
                     push_back_map(index);
                     date_to_index[v.julian()] = index;
                 } else {
@@ -173,9 +220,9 @@ struct RetentionLostState {
         }
     }
 
-    void merge(std::vector<std::vector<int32_t>> other) {
-        for (const auto& row : other) {
-            int32_t date = row[0];
+    void merge(std::vector<std::vector<int32_t>> other, std::vector<std::vector<double>> other_sum) {
+        for (int i = 0; i < other.size(); i++) {
+            int32_t date = other[i][0];
             if (!date_to_index.contains(date)) {
                 int index = 0;
                 for (; index < res.size(); index++) {
@@ -183,13 +230,17 @@ struct RetentionLostState {
                         break;
                     }
                 }
-                res.insert(res.begin() + index, row);
+                res.insert(res.begin() + index, other[i]);
+                sum.insert(sum.begin() + index, other_sum[i]);
                 push_back_map(index);
                 date_to_index[date] = index;
             } else {
                 int index = date_to_index[date];
-                for (int i = 1; i < res[index].size(); i++) {
-                    res[index][i] += row[i];
+                for (int j = 1; j < res[index].size(); j++) {
+                    res[index][j] += other[i][j];
+                }
+                for (int j = 0; j < sum[index].size(); j++) {
+                    sum[index][j] += other_sum[i][j];
                 }
             }
         }
@@ -260,6 +311,97 @@ struct RetentionLostState {
         }
         lost.close();
         root.add("1", lost.slice());
+        vpack::Builder value;
+        value.openObject();
+
+        typedef double T;
+        typedef exprtk::symbol_table<T> symbol_table_t;
+        typedef exprtk::expression<T>   expression_t;
+        typedef exprtk::parser<T>       parser_t;
+
+        std::vector<T> variables;
+        variables.resize(value_num);
+        symbol_table_t symbol_table;
+        for (int i = 0; i < value_num; i++) {
+            symbol_table.add_variable("a" + std::to_string(i), variables[i]);
+        }
+        symbol_table.add_constants();
+
+        expression_t expression;
+        expression.register_symbol_table(symbol_table);
+
+        parser_t parser;
+        parser.compile(formula, expression);
+
+        for (int i = 0; i < sum.size(); i++) {
+            std::vector<double> compute_res;
+            compute_res.reserve(sum[0].size());
+            for (int k = 0; k < value_num; k++) {
+                if (_compute_type[k] == 1 || _compute_type[k] == 3) {
+                    for (int j = 0; j < _time_unit_num + 1; j++) {
+                        compute_res[j +  k * (1 + _time_unit_num)] = sum[i][j +  k * (1 + _time_unit_num)];
+                    }
+                } else if (_compute_type[k] == 2) {
+                    for (int j = 0; j < _time_unit_num + 1; j++) {
+                        compute_res[j +  k * (1 + _time_unit_num)] = sum[i][j +  k * (1 + _time_unit_num)] / res[i][j + 2];
+                    }
+                } else {
+                    for (int j = 0; j < _time_unit_num + 1; j++) {
+                        compute_res[j +  k * (1 + _time_unit_num)] = sum[i][j +  k * (1 + _time_unit_num)] / res[i][1];
+                    }
+                }
+            }
+            vpack::Builder builder_array;
+            builder_array.openArray();
+            builder_array.add(vpack::Value(0));
+            for (int j = 0; j < _time_unit_num + 1; j++) {
+                for (int k = 0; k < value_num; k++) {
+                    variables[k] = compute_res[j +  k * (1 + _time_unit_num)];
+                }
+                auto result = expression.value();
+                if (std::isinf(result) || std::isnan(result)) {
+                    builder_array.add(nullJsonSlice());
+                    continue ;
+                }
+                builder_array.add(vpack::Value(result));
+            }
+            builder_array.close();
+            DateValue v;
+            v.set_julian(res[i][0]);
+            TimestampValue timestamp_value;
+            int y, m, d;
+            v.to_date(&y, &m, &d);
+            timestamp_value.from_timestamp(y, m, d, 0, 0, 0, 0);
+            value.add(std::to_string((timestamp_value.to_unix_second() - offset) * 1000), builder_array.slice());
+        }
+        value.close();
+        root.add("2", value.slice());
+        vpack::Builder sum_json;
+        sum_json.openObject();
+        for (int i = 0; i < sum.size(); i++) {
+            vpack::Builder outer_array;
+            outer_array.openArray();
+            for (int k = 0; k < value_num; k++) {
+                vpack::Builder builder_array;
+                builder_array.openArray();
+                builder_array.add(vpack::Value(0));
+                for (int j = 0 + k * (_time_unit_num + 1); j < (k + 1) * (_time_unit_num + 1); j++) {
+                    builder_array.add(vpack::Value(sum[i][j]));
+                }
+                builder_array.close();
+                outer_array.add(builder_array.slice());
+            }
+            outer_array.close();
+            DateValue v;
+            v.set_julian(res[i][0]);
+            TimestampValue timestamp_value;
+            int y, m, d;
+            v.to_date(&y, &m, &d);
+            timestamp_value.from_timestamp(y, m, d, 0, 0, 0, 0);
+            sum_json.add(std::to_string((timestamp_value.to_unix_second() - offset) * 1000), outer_array.slice());
+        }
+        sum_json.close();
+        root.add("202", sum_json.slice());
         root.close();
         JsonValue json(root.slice());
         json_column->append(json);
@@ -283,8 +425,6 @@ struct RetentionLostState {
         return y;
     }
 
-    uint64_t _bitmap;
-
     const static int64_t split = 0xFFFFFFFF;
 
     static inline uint64_t bool_values[] = {(1UL << 31) - 1, (1UL << 30) - 1, (1UL << 29) - 1, (1UL << 28) - 1, (1UL << 27) - 1,
@@ -294,16 +434,19 @@ struct RetentionLostState {
                                             (1UL << 11) - 1, (1UL << 10) - 1, (1UL << 9) - 1, (1UL << 8) - 1, (1UL << 7) - 1,
                                             (1UL << 6) - 1, (1UL << 5) - 1, (1UL << 4) - 1, (1UL << 3) - 1, (1UL << 2) - 1, (1UL << 1) - 1};
 
+    size_t value_num = 0;
     int _time_unit_num;
     std::string _time_unit;
+    std::vector<int> _compute_type;
     bool _is_init = false;
-    int max_month_diff;
     std::vector<std::vector<int32_t>> res;
+    std::vector<std::vector<double>> sum;
     std::unordered_map<int32_t, int> date_to_index;
+    std::string formula;
 };
 
-class RetentionLostAggregateFunction final
-        : public AggregateFunctionBatchHelper<RetentionLostState, RetentionLostAggregateFunction> {
+class RetentionLostValueFormulaAggregateFunction final
+        : public AggregateFunctionBatchHelper<RetentionLostValueFormulaState, RetentionLostValueFormulaAggregateFunction> {
 public:
 
     void init_state_if_necessary(FunctionContext* ctx, AggDataPtr __restrict state) const {
@@ -311,23 +454,38 @@ public:
             return;
         }
         int constant_num = ctx->get_num_constant_columns();
-        auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 2));
-        auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
-        this->data(state).init(time_unit_num, time_unit.to_string());
+        auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 3));
+        auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 2));
+        auto formula_string = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
+        auto column = ctx->get_constant_column(constant_num - 4);
+        auto* array_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column.get()));
+        auto offsets = array_column->offsets();
+        auto int_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        std::vector<int> compute_type;
+        for (int i = 0 ; i < offsets.get_data()[1]; i++) {
+            compute_type.emplace_back(int_column->get_data()[i]);
+        }
+        this->data(state).init(time_unit_num, time_unit.to_string(), compute_type, formula_string.to_string());
     }
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         if ((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()) {
+            phmap::flat_hash_map<int32_t, std::vector<double>> date_to_value;
+            auto value_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[2]));
+            this->data(state).deserialize_values(value_column->get(row_num).get_slice(), &date_to_value);
             return;
         }
         init_state_if_necessary(ctx, state);
         auto init_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[0]));
         auto return_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[1]));
+        auto value_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[2]));
         if (init_column->get(row_num).get_slice().size == 0) {
+            phmap::flat_hash_map<int32_t, std::vector<double>> date_to_value;
+            this->data(state).deserialize_values(value_column->get(row_num).get_slice(), &date_to_value);
             return;
         }
-        this->data(state).update(init_column, return_column, row_num);
+        this->data(state).update(init_column, return_column, value_column, row_num);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
@@ -341,8 +499,12 @@ public:
             return;
         }
         offset += sizeof(size_t);
+        std::memcpy(&this->data(state).value_num, serialized.data + offset, sizeof(size_t));
+        offset += sizeof(size_t);
         std::vector<std::vector<int32_t>> other;
         other.resize(size);
+        std::vector<std::vector<double>> other_sum;
+        other_sum.resize(size);
         for (int i = 0; i < size; i++) {
             other[i].resize(2 * this->data(state)._time_unit_num + 5);
             for (int j = 0; j < 2 * this->data(state)._time_unit_num + 5; j++) {
@@ -351,17 +513,30 @@ public:
                 other[i][j] = tmp;
                 offset += sizeof(int32_t);
             }
+            other_sum[i].resize(this->data(state).value_num * (this->data(state)._time_unit_num + 1));
+            for (int j = 0; j < this->data(state).value_num * (this->data(state)._time_unit_num + 1); j++) {
+                double tmp;
+                std::memcpy(&tmp, serialized.data + offset, sizeof(double));
+                other_sum[i][j] = tmp;
+                offset += sizeof(double);
+            }
         }
-        this->data(state).merge(other);
+        this->data(state).merge(other, other_sum);
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         serialize_state(this->data(state), down_cast<BinaryColumn*>(ColumnHelper::get_data_column(to)));
+        if (to->is_nullable()) {
+            down_cast<NullableColumn*>(to)->null_column()->append(0);
+        }
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         auto* json_column = down_cast<JsonColumn*>(ColumnHelper::get_data_column(to));
         this->data(state).finalize_to_json_column(json_column, ctx->state()->timezone_obj());
+        if (to->is_nullable()) {
+            down_cast<NullableColumn*>(to)->null_column()->append(0);
+        }
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
@@ -370,41 +545,58 @@ public:
         dst_column->reserve(chunk_size);
 
         int constant_num = ctx->get_num_constant_columns();
-        auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 2));
-        auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
+        auto time_unit_num = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 3));
+        auto time_unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 2));
+        auto formula_string = ColumnHelper::get_const_value<TYPE_VARCHAR>(ctx->get_constant_column(constant_num - 1));
+        auto column = ctx->get_constant_column(constant_num - 4);
+        auto* array_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column.get()));
+        auto offsets = array_column->offsets();
+        auto int_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        std::vector<int> compute_type;
+        for (int i = 0 ; i < offsets.get_data()[1]; i++) {
+            compute_type.emplace_back(int_column->get_data()[i]);
+        }
 
         const auto* init_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[0].get()));
         const auto* return_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[1].get()));
+        const auto* value_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[2].get()));
         for (size_t i = 0; i < chunk_size; ++i) {
-            RetentionLostState state;
-            state.init(time_unit_num, time_unit.to_string());
-            state.update(init_column, return_column, i);
+            RetentionLostValueFormulaState state;
+            state.init(time_unit_num, time_unit.to_string(), compute_type, formula_string.to_string());
+            state.update(init_column, return_column, value_column, i);
             serialize_state(state, dst_column);
         }
     }
 
-    void serialize_state(const RetentionLostState& state, BinaryColumn* dst) const {
+    void serialize_state(const RetentionLostValueFormulaState& state, BinaryColumn* dst) const {
         Bytes& bytes = dst->get_bytes();
         const size_t old_size = bytes.size();
         int64_t total_size = 0;
         size_t offset = bytes.size();
-        total_size += sizeof(size_t);
-        total_size += sizeof(int32_t) * state.res.size() * state.res[0].size();
+        total_size += 2 * sizeof(size_t);
+        total_size += sizeof(int32_t) * state.res.size() * state.res[0].size() +
+              state.sum.size() * state.sum[0].size() * sizeof(double);
         const size_t new_size = old_size + total_size;
         bytes.resize(new_size);
         size_t size = state.res.size();
         std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+        offset += sizeof(size_t);
+        std::memcpy(bytes.data() + offset, &state.value_num, sizeof(size_t));
         offset += sizeof(size_t);
         for (int i = 0; i < state.res.size(); i++) {
             for (int j = 0; j < state.res[0].size(); j++) {
                 std::memcpy(bytes.data() + offset, &state.res[i][j], sizeof(int32_t));
                 offset += sizeof(int32_t);
             }
+            for (int j = 0; j < state.sum[0].size(); j++) {
+                std::memcpy(bytes.data() + offset, &state.sum[i][j], sizeof(double));
+                offset += sizeof(double);
+            }
         }
         dst->get_offset().emplace_back(new_size);
     }
 
-    std::string get_name() const override { return "retention_lost_date_collect_agg"; }
+    std::string get_name() const override { return "retention_lost_date_sim_stat_formula_collect_agg"; }
 };
 
 } // namespace starrocks

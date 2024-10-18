@@ -118,6 +118,9 @@ public:
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
+        if ((column->is_nullable() && column->is_null(row_num)) || column->only_null()) {
+            return;
+        }
         const auto* input_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(column));
         Slice serialized = input_column->get(row_num).get_slice();
         size_t offset = 0;
@@ -154,15 +157,17 @@ public:
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
                                      ColumnPtr* dst) const override {
-        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+        auto* dst_column = down_cast<BinaryColumn*>(ColumnHelper::get_data_column((*dst).get()));
         dst_column->reserve(chunk_size);
 
         const auto* src_column = down_cast<const DateColumn*>(src[0].get());
-
         for (size_t i = 0; i < chunk_size; ++i) {
+            if ((src_column->is_nullable() && src_column->is_null(i)) || src_column->only_null()) {
+                continue ;
+            }
             Bytes& bytes = dst_column->get_bytes();
-            size_t new_byte_size = bytes.size();
             size_t offset = bytes.size();
+            size_t new_byte_size = bytes.size();
             new_byte_size += sizeof(size_t);
             new_byte_size += sizeof(uint64_t);
             bytes.resize(new_byte_size);
@@ -176,6 +181,9 @@ public:
             std::memcpy(bytes.data() + offset, &v, sizeof(uint64_t));
             offset += sizeof(uint64_t);
             dst_column->get_offset().emplace_back(offset);
+            if (dst->get()->is_nullable()) {
+                down_cast<NullableColumn*>((*dst).get())->null_column()->append(0);
+            }
         }
     }
 

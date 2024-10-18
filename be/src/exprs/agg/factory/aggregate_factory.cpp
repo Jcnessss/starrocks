@@ -23,15 +23,22 @@
 #include "exprs/agg/bool_or.h"
 #include "exprs/agg/bit_agg.h"
 #include "exprs/agg/date_collect_ta.h"
+#include "exprs/agg/date_value_collect_ta.h"
+#include "exprs/agg/date_value_array_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/retention_lost_date_collect_agg.h"
+#include "exprs/agg/retention_lost_date_quota_array_agg.h"
+#include "exprs/agg/retention_lost_date_sim_stat_collect_agg.h"
+#include "exprs/agg/retention_lost_date_sim_stat_quota_array_agg.h"
+#include "exprs/agg/retention_lost_date_sim_stat_formula_collect_agg.h"
+#include "exprs/agg/retention_lost_date_sim_stat_formula_quota_array_agg.h"
 #include "exprs/agg/retention_ta.h"
+#include "exprs/agg/ta_funnel.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
 
-#include "exprs/agg/ta_funnel.h"
 
 namespace starrocks {
 
@@ -79,12 +86,36 @@ AggregateFunctionPtr AggregateFactory::MakeRetentionLostAggregateFunction() {
     return std::make_shared<RetentionLostAggregateFunction>();
 }
 
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostValueAggregateFunction() {
+    return std::make_shared<RetentionLostValueAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostValueFormulaAggregateFunction() {
+    return std::make_shared<RetentionLostValueFormulaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostQuotaAggregateFunction() {
+    return std::make_shared<RetentionLostQuotaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostValueQuotaAggregateFunction() {
+    return std::make_shared<RetentionLostValueQuotaAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeRetentionLostValueFormulaQuotaAggregateFunction() {
+    return std::make_shared<RetentionLostValueFormulaQuotaAggregateFunction>();
+}
+
 AggregateFunctionPtr AggregateFactory::MakeBooleanOrAggregateFunction() {
     return std::make_shared<BooleanOrAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {
     return std::make_shared<DateCollectFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeDateValueCollectAggregateFunction() {
+    return std::make_shared<DateValueCollectFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
@@ -97,6 +128,10 @@ AggregateFunctionPtr AggregateFactory::MakeBitwishAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction() {
     return std::make_shared<FunnelPackedTimeCollectAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeDateValueArrayCollectAggregateFunction() {
+    return std::make_shared<DateValueArrayCollectFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {

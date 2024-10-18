@@ -433,6 +433,9 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
         }
 
         int node_idx = 0;
+        for (const auto& ee : desc.nodes[0].fn.arg_types) {
+            TypeDescriptor arg_type = TypeDescriptor::from_thrift(ee);
+        }
         for (int j = 0; j < desc.nodes[0].num_children; ++j) {
             ++node_idx;
             Expr* expr = nullptr;
@@ -859,7 +862,6 @@ void Aggregator::process_limit(ChunkPtr* chunk) {
         (*chunk)->set_num_rows((*chunk)->num_rows() - num_rows_over);
         COUNTER_SET(_agg_stat->rows_returned_counter, _limit);
         _is_ht_eos = true;
-        LOG(INFO) << "Aggregate Node ReachedLimit " << _limit;
     }
 }
 

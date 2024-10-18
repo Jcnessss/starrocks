@@ -83,6 +83,20 @@ void AggregateFuncResolver::register_others() {
     add_general_mapping_notnull("group_concat2", false, AggregateFactory::MakeGroupConcatAggregateFunctionV2());
     add_general_mapping_notnull("retention_lost_date_collect_agg",
                                 false, AggregateFactory::MakeRetentionLostAggregateFunction());
+    add_general_mapping_notnull("retention_lost_date_sim_stat_collect_agg",
+                                false, AggregateFactory::MakeRetentionLostValueAggregateFunction());
+    add_general_mapping_notnull("retention_lost_date_sim_stat_formula_collect_agg",
+                                false, AggregateFactory::MakeRetentionLostValueFormulaAggregateFunction());
+    add_general_mapping_notnull("ta_date_value_collect",
+                                false, AggregateFactory::MakeDateValueCollectAggregateFunction());
+    add_general_mapping_notnull("ta_date_value_array_collect",
+                                false, AggregateFactory::MakeDateValueArrayCollectAggregateFunction());
+    add_general_mapping_notnull("retention_lost_date_quota_array_agg",
+                                false, AggregateFactory::MakeRetentionLostQuotaAggregateFunction());
+    add_general_mapping_notnull("retention_lost_date_sim_stat_quota_array_agg",
+                                false, AggregateFactory::MakeRetentionLostValueQuotaAggregateFunction());
+    add_general_mapping_notnull("retention_lost_date_sim_stat_formula_quota_array_agg",
+                                false, AggregateFactory::MakeRetentionLostValueFormulaQuotaAggregateFunction());
 }
 
 } // namespace starrocks
