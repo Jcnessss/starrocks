@@ -36,53 +36,26 @@
 #include "util/slice.h"
 
 namespace starrocks {
-struct DateCollectState {
+struct DateValueCollectState {
 
-    void update(const DateColumn* column, size_t row_num) {
-        DateValue value = column->get_data()[row_num];
-        int date = numeric_date(value);
-        int key = date / 100;
-        int day = date % 100;
-        if (!month_to_index.contains(key)) {
-            uint64_t v = (static_cast<uint64_t>(key) << 32) | bool_values[day - 1];
-            dates.emplace_back(v);
-            month_to_index[key] = dates.size() - 1;
-        } else {
-            int index = month_to_index[key];
-            dates[index] |= bool_values[day - 1];
-        }
+    void update(const DateColumn* date_column, const DoubleColumn* value_column, size_t row_num) {
+        DateValue date = date_column->get_data()[row_num];
+        dates.emplace_back(date.julian());
+        double value = value_column->get_data()[row_num];
+        values[date.julian()] = value;
     }
 
-    void merge(uint64_t date) {
-        int key = date >> 32;
-        if (!month_to_index.contains(key)) {
-            dates.emplace_back(date);
-            month_to_index[key] = dates.size() - 1;
-        } else {
-            int index = month_to_index[key];
-            dates[index] = dates[index] |= date;
-        }
+    void merge(int32_t date, double value) {
+        dates.emplace_back(date);
+        values[date] = value;
     }
 
-    int numeric_date(DateValue v) {
-        int y, m, d;
-        v.to_date(&y, &m, &d);
-        return y * 10000 + 100 * m + d;
-    }
-
-    // Mask is used to identify top 50 bits.
-    static inline uint64_t bool_values[] = {1UL << 31, 1UL << 30, 1UL << 29,
-                                            1UL << 28, 1UL << 27, 1UL << 26, 1UL << 25, 1UL << 24, 1UL << 23, 1UL << 22,
-                                            1UL << 21, 1UL << 20, 1UL << 19, 1UL << 18, 1UL << 17, 1UL << 16, 1UL << 15,
-                                            1UL << 14, 1UL << 13, 1UL << 12, 1UL << 11, 1UL << 10, 1UL << 9, 1UL << 8,
-                                            1UL << 7, 1UL << 6, 1UL << 5, 1UL << 4, 1UL << 3, 1UL << 2, 1UL << 1};
-    bool _is_init = false;
-    std::vector<uint64_t> dates;
-    std::unordered_map<int, int> month_to_index;
+    std::vector<int32_t> dates;
+    phmap::flat_hash_map<int32_t, double> values;
 };
 
-class DateCollectFunction final
-        : public AggregateFunctionBatchHelper<DateCollectState, DateCollectFunction> {
+class DateValueCollectFunction final
+        : public AggregateFunctionBatchHelper<DateValueCollectState, DateValueCollectFunction> {
 public:
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
@@ -90,8 +63,9 @@ public:
         if ((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()) {
             return;
         }
-        auto column = down_cast<const DateColumn*>(ColumnHelper::get_data_column(columns[0]));
-        this->data(state).update(column, row_num);
+        auto date_column = down_cast<const DateColumn*>(ColumnHelper::get_data_column(columns[0]));
+        auto value_column = down_cast<const DoubleColumn*>(ColumnHelper::get_data_column(columns[1]));
+        this->data(state).update(date_column, value_column, row_num);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
@@ -103,9 +77,12 @@ public:
         offset += sizeof(size_t);
         for (int i = 0; i < size; i++) {
             uint64_t date;
-            std::memcpy(&date, serialized.data + offset, sizeof(uint64_t));
-            this->data(state).merge(date);
-            offset += sizeof(uint64_t);
+            std::memcpy(&date, serialized.data + offset, sizeof(int32_t));
+            offset += sizeof(int32_t);
+            uint64_t value;
+            std::memcpy(&value, serialized.data + offset, sizeof(double));
+            offset += sizeof(double);
+            this->data(state).merge(date, value);
         }
     }
 
@@ -114,21 +91,22 @@ public:
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        std::vector<uint64_t> copy(this->data(state).dates);
+        std::vector<int32_t> copy(this->data(state).dates);
         std::sort(copy.begin(), copy.end());
         auto* dst = down_cast<BinaryColumn*>(ColumnHelper::get_data_column(to));
         Bytes& bytes = dst->get_bytes();
-        size_t new_byte_size = bytes.size();
         size_t offset = bytes.size();
-        new_byte_size += sizeof(size_t);
-        new_byte_size += sizeof(uint64_t) * copy.size();
-        bytes.resize(new_byte_size);
         size_t size = copy.size();
+
+        bytes.resize(bytes.size() + sizeof(size_t) + size * (sizeof(int32_t) + sizeof(double)));
         std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+
         offset += sizeof(size_t);
-        for (uint64_t date : copy) {
-            std::memcpy(bytes.data() + offset, &date, sizeof(uint64_t));
+        for (int i = 0; i < copy.size(); i++) {
+            std::memcpy(bytes.data() + offset, &copy[i], sizeof(int32_t));
             offset += sizeof(uint64_t);
+            std::memcpy(bytes.data() + offset, &this->data(state).values.at(copy[i]), sizeof(double));
+            offset += sizeof(double);
         }
         dst->get_offset().emplace_back(offset);
     }
@@ -138,32 +116,42 @@ public:
         auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
         dst_column->reserve(chunk_size);
 
-        const auto* src_column = down_cast<const DateColumn*>(src[0].get());
+        const auto* date_column = down_cast<const DateColumn*>(src[0].get());
+        const auto* value_column = down_cast<const BinaryColumn*>(src[1].get());
+        Bytes& bytes = dst_column->get_bytes();
+        size_t offset = bytes.size();
+        bytes.resize(bytes.size() + chunk_size * (sizeof(size_t) + sizeof(int32_t) + sizeof(double)));
         for (size_t i = 0; i < chunk_size; ++i) {
-            DateCollectState state;
-            state.update(src_column, i);
-            serialize_state(state, dst_column);
+            size_t size = 1;
+            std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+            offset += sizeof(size_t);
+            std::memcpy(bytes.data() + offset, &date_column->get_data()[i], sizeof(int32_t));
+            offset += sizeof(int32_t);
+            std::memcpy(bytes.data() + offset, &value_column->get_data()[i], sizeof(double));
+            offset += sizeof(double);
+            dst_column->get_offset().emplace_back(offset);
         }
     }
 
-    void serialize_state(const DateCollectState& state, BinaryColumn* dst) const {
+    void serialize_state(const DateValueCollectState& state, BinaryColumn* dst) const {
         Bytes& bytes = dst->get_bytes();
-        size_t new_byte_size = bytes.size();
         size_t offset = bytes.size();
-        new_byte_size += sizeof(size_t);
-        new_byte_size += sizeof(uint64_t) * state.dates.size();
-        bytes.resize(new_byte_size);
         size_t size = state.dates.size();
+
+        bytes.resize(bytes.size() + sizeof(size_t) + size * (sizeof(int32_t) + sizeof(double)));
         std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+
         offset += sizeof(size_t);
-        for (uint64_t date : state.dates) {
-          std::memcpy(bytes.data() + offset, &date, sizeof(uint64_t));
-          offset += sizeof(uint64_t);
+        for (int i = 0; i < state.dates.size(); i++) {
+            std::memcpy(bytes.data() + offset, &state.dates[i], sizeof(int32_t));
+            offset += sizeof(uint64_t);
+            std::memcpy(bytes.data() + offset, &state.values.at(state.dates[i]), sizeof(double));
+            offset += sizeof(double);
         }
         dst->get_offset().emplace_back(offset);
     }
 
-    std::string get_name() const override { return "ta_date_collect"; }
+    std::string get_name() const override { return "ta_date_value_collect"; }
 };
 
 } // namespace starrocks
