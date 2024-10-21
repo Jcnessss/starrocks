@@ -43,25 +43,35 @@ struct DateCollectState {
         int date = numeric_date(value);
         int key = date / 100;
         int day = date % 100;
-        if (!month_to_index.contains(key)) {
+        if (int index = search(year_months, key); index == -1) {
             uint64_t v = (static_cast<uint64_t>(key) << 32) | bool_values[day - 1];
             dates.emplace_back(v);
-            month_to_index[key] = dates.size() - 1;
+            year_months.emplace_back(key);
         } else {
-            int index = month_to_index[key];
             dates[index] |= bool_values[day - 1];
         }
     }
 
-    void merge(uint64_t date) {
-        int key = date >> 32;
-        if (!month_to_index.contains(key)) {
-            dates.emplace_back(date);
-            month_to_index[key] = dates.size() - 1;
-        } else {
-            int index = month_to_index[key];
-            dates[index] = dates[index] |= date;
+    void merge(uint64_t* date_array, size_t size) {
+        for (int i = 0; i < size; i++) {
+            auto date = date_array[i];
+            int key = date >> 32;
+            if (int index = search(year_months, key); index == -1) {
+                dates.emplace_back(date);
+                year_months.emplace_back(key);
+            } else {
+                dates[index] = dates[index] |= date;
+            }
         }
+    }
+
+    int search(const std::vector<int>& nums, int target) {
+        for (int i = 0; i < nums.size(); i++) {
+            if (nums[i] == target) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     int numeric_date(DateValue v) {
@@ -77,13 +87,26 @@ struct DateCollectState {
                                             1UL << 14, 1UL << 13, 1UL << 12, 1UL << 11, 1UL << 10, 1UL << 9, 1UL << 8,
                                             1UL << 7, 1UL << 6, 1UL << 5, 1UL << 4, 1UL << 3, 1UL << 2, 1UL << 1};
     bool _is_init = false;
+    std::vector<int> year_months;
     std::vector<uint64_t> dates;
-    std::unordered_map<int, int> month_to_index;
+    phmap::flat_hash_map<int, int> month_to_index;
 };
 
 class DateCollectFunction final
         : public AggregateFunctionBatchHelper<DateCollectState, DateCollectFunction> {
 public:
+
+    static inline uint64_t bool_values[] = {1UL << 31, 1UL << 30, 1UL << 29,
+                                            1UL << 28, 1UL << 27, 1UL << 26, 1UL << 25, 1UL << 24, 1UL << 23, 1UL << 22,
+                                            1UL << 21, 1UL << 20, 1UL << 19, 1UL << 18, 1UL << 17, 1UL << 16, 1UL << 15,
+                                            1UL << 14, 1UL << 13, 1UL << 12, 1UL << 11, 1UL << 10, 1UL << 9, 1UL << 8,
+                                            1UL << 7, 1UL << 6, 1UL << 5, 1UL << 4, 1UL << 3, 1UL << 2, 1UL << 1};
+
+    int numeric_date(DateValue v) const {
+        int y, m, d;
+        v.to_date(&y, &m, &d);
+        return y * 10000 + 100 * m + d;
+    }
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
@@ -101,12 +124,8 @@ public:
         size_t size;
         std::memcpy(&size, serialized.data + offset, sizeof(size_t));
         offset += sizeof(size_t);
-        for (int i = 0; i < size; i++) {
-            uint64_t date;
-            std::memcpy(&date, serialized.data + offset, sizeof(uint64_t));
-            this->data(state).merge(date);
-            offset += sizeof(uint64_t);
-        }
+        uint64_t* date_array = reinterpret_cast<uint64_t*>(serialized.data + offset);
+        this->data(state).merge(date_array, size);
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
@@ -139,10 +158,24 @@ public:
         dst_column->reserve(chunk_size);
 
         const auto* src_column = down_cast<const DateColumn*>(src[0].get());
+
         for (size_t i = 0; i < chunk_size; ++i) {
-            DateCollectState state;
-            state.update(src_column, i);
-            serialize_state(state, dst_column);
+            Bytes& bytes = dst_column->get_bytes();
+            size_t new_byte_size = bytes.size();
+            size_t offset = bytes.size();
+            new_byte_size += sizeof(size_t);
+            new_byte_size += sizeof(uint64_t);
+            bytes.resize(new_byte_size);
+            size_t size = 1;
+            std::memcpy(bytes.data() + offset, &size, sizeof(size_t));
+            offset += sizeof(size_t);
+            int date = numeric_date(src_column->get_data()[i]);
+            int key = date / 100;
+            int day = date % 100;
+            uint64_t v = (static_cast<uint64_t>(key) << 32) | bool_values[day - 1];
+            std::memcpy(bytes.data() + offset, &v, sizeof(uint64_t));
+            offset += sizeof(uint64_t);
+            dst_column->get_offset().emplace_back(offset);
         }
     }
 
