@@ -207,4 +207,32 @@ void TaFunctions::rightCommaDoubleToString(const double value, starrocks::Slice*
     slice->truncate(pos+1);
 }
 
+
+StatusOr<ColumnPtr> TaFunctions::funnel_pack_time(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+    auto datetime_viewer = ColumnViewer<TYPE_DATETIME>(columns[0]);
+    auto funnel_index_viewer = ColumnViewer<TYPE_INT>(columns[1]);
+
+    size_t size = columns[0]->size();
+    ColumnBuilder<TYPE_BIGINT> builder(size);
+    for (size_t i = 0; i < size; ++i) {
+        if (datetime_viewer.is_null(i) || funnel_index_viewer.is_null(i)) {
+            builder.append_null();
+            continue;
+        }
+        auto funnel_index = funnel_index_viewer.value(i);
+        if (funnel_index > FUNNEL_INDEX_MASK) {
+            throw std::runtime_error("funnelIndex overflow: " + std::to_string(funnel_index));
+        }
+        auto datetime = datetime_viewer.value(i);
+        int64_t unix_timestamp = datetime.to_unix_microsecond();
+        int64_t mills = unix_timestamp / 1000;
+        int64_t shiftedMills = mills << MILLIS_SHIFT;
+        if (shiftedMills >> MILLIS_SHIFT != mills) {
+            throw std::runtime_error("Millis overflow: " + std::to_string(shiftedMills));
+        }
+        builder.append(shiftedMills | (funnel_index & FUNNEL_INDEX_MASK));
+    }
+    return builder.build(ColumnHelper::is_all_const(columns));
+}
 } // namespace starrocks

@@ -1329,5 +1329,6 @@ vectorized_functions = [
     [180000, 'is_role_in_session', True, False, 'BOOLEAN', ['VARCHAR'], 'nullptr'],
 
     # 3xxxx Thinkingdata function
-    [330001, 'get_distribute_group_str', True, False, 'VARCHAR', ['DOUBLE','DOUBLE','BIGINT','BIGINT','DOUBLE'], 'TaFunctions::get_distribute_group_str']
+    [330001, 'get_distribute_group_str', True, False, 'VARCHAR', ['DOUBLE','DOUBLE','BIGINT','BIGINT','DOUBLE'], 'TaFunctions::get_distribute_group_str'],
+	[320005, 'funnel_pack_time', True, False, 'BIGINT', ['DATETIME','INT'], 'TaFunctions::funnel_pack_time']
 ]

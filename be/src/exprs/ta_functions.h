@@ -26,6 +26,13 @@ public:
      */
     DEFINE_VECTORIZED_FN(get_distribute_group_str);
 
+    /**
+     * @param:
+     * @paramType columns: [TYPE_DATETIME, TYPE_BIGINT]
+     * @return TYPE_INT
+     */
+    DEFINE_VECTORIZED_FN(funnel_pack_time);
+
 private:
     static void get_distribute_group_str_inner(double minVal, double maxVal, int64_t discreteLimit, int64_t number,double statVal, Slice* slice);
     static void getGroupStr(double statVal, int64_t d, double minVal, double maxVal,Slice* slice);
@@ -36,6 +43,9 @@ private:
     static void leftCommaDoubleToString(double value, starrocks::Slice* slice);
     static void rightCommaDoubleToString(const double value, starrocks::Slice* slice);
     static void getSimpleGroupStr(double statVal0, double minVal0, double maxVal0, Slice* pSlice);
+
+    static const int32_t FUNNEL_INDEX_MASK = 0xFFF;
+    static const int32_t MILLIS_SHIFT = 12;
 };
 
 } // namespace starrocks
