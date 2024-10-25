@@ -89,7 +89,6 @@ public class CreateResourceGroupStmt extends DdlStmt {
         if (resourceGroup.getResourceGroupType() == null) {
             resourceGroup.setResourceGroupType(TWorkGroupType.WG_NORMAL);
         }
-
         if (resourceGroup.getResourceGroupType() == TWorkGroupType.WG_SHORT_QUERY &&
                 (resourceGroup.getExclusiveCpuCores() != null && resourceGroup.getExclusiveCpuCores() > 0)) {
             throw new SemanticException(SHORT_QUERY_SET_EXCLUSIVE_CPU_CORES_ERR_MSG);
@@ -97,6 +96,9 @@ public class CreateResourceGroupStmt extends DdlStmt {
 
         ResourceGroup.validateCpuParameters(resourceGroup.getRawCpuWeight(), resourceGroup.getExclusiveCpuCores());
 
+        if (resourceGroup.getCpuCoreLimit() == null) {
+            throw new SemanticException("property 'cpu_core_limit' is absent");
+        }
         if (resourceGroup.getMemLimit() == null) {
             throw new SemanticException("property 'mem_limit' is absent");
         }

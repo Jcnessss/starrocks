@@ -354,6 +354,25 @@ public class ResourceGroupStmtTest {
     }
 
     @Test
+    public void testCreateResourceGroupWithoutCpuCoreLimit() throws Exception {
+        String sql = "create resource group rg_without_cpu_core_limit\n" +
+                "to\n" +
+                "    (role='rg1_role1')\n" +
+                "with (\n" +
+                "    'concurrency_limit' = '10',\n" +
+                "    'type' = 'normal'" +
+                ");";
+        starRocksAssert.executeResourceGroupDdlSql(sql);
+
+        List<List<String>> rows = starRocksAssert.executeResourceGroupShowSql("show resource group rg_without_cpu_core_limit");
+        String actual = rowsToString(rows);
+        String expect = "rg_without_cpu_core_limit|null|100.0%|null|0|0|0|10|100%|NORMAL|(weight=1.0, role=rg1_role1)";
+        Assert.assertEquals(expect, actual);
+
+        starRocksAssert.executeResourceGroupDdlSql("DROP RESOURCE GROUP rg_without_cpu_core_limit");
+    }
+
+    @Test
     public void testQueryType() throws Exception {
         String sql1 = "create resource group rg_insert\n" +
                 "to (user='rg_user3', query_type in ('mv')) with ('cpu_core_limit' = '10', 'mem_limit' = '20%')";
