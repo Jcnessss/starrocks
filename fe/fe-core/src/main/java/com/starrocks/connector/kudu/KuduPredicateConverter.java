@@ -35,6 +35,7 @@ import org.apache.logging.log4j.Logger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -189,8 +190,9 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
                 return (int) ChronoUnit.DAYS.between(epochDay, localDate);
             case DATETIME:
                 LocalDateTime localDateTime = constValue.getDatetime();
-                LocalDateTime epochDateTime = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC).toLocalDateTime();
-                return ChronoUnit.MICROS.between(epochDateTime, localDateTime);
+                return ChronoUnit.MICROS.between(
+                        Instant.EPOCH,
+                        localDateTime.atZone(ZoneId.systemDefault()));
             default:
                 return null;
         }

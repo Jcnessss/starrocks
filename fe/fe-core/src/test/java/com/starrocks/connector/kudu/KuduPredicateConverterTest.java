@@ -30,6 +30,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 
@@ -83,7 +85,10 @@ public class KuduPredicateConverterTest {
 
     @Test
     public void testEqDateTime() {
-        ConstantOperator value = ConstantOperator.createDatetime(LocalDateTime.of(2024, 1, 1, 0, 0));
+        LocalDateTime localDateTime = OffsetDateTime.parse("2024-01-01T00:00:00.000000Z")
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .toLocalDateTime();
+        ConstantOperator value = ConstantOperator.createDatetime(localDateTime);
         ScalarOperator op = new BinaryPredicateOperator(BinaryType.EQ, F4, value);
         List<KuduPredicate> result = CONVERTER.convert(op);
         Assert.assertEquals(result.get(0).toString(), "`f4` = 2024-01-01T00:00:00.000000Z");
