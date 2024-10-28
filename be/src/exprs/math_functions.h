@@ -135,6 +135,21 @@ public:
     DEFINE_VECTORIZED_FN(cos);
     DEFINE_VECTORIZED_FN(is_finite_double);
     DEFINE_VECTORIZED_FN(is_finite_float);
+    DEFINE_VECTORIZED_FN(is_infinite_double);
+    DEFINE_VECTORIZED_FN(is_infinite_float);
+    DEFINE_VECTORIZED_FN(is_nan_double);
+    DEFINE_VECTORIZED_FN(is_nan_float);
+    /**
+     * @param columns: []
+     * @return DoubleColumn
+     */
+    DEFINE_VECTORIZED_FN(nan);
+
+    /**
+     * @param columns: []
+     * @return DoubleColumn
+     */
+    DEFINE_VECTORIZED_FN(infinity);
 
     /**
      * @param columns: [DoubleColumn]

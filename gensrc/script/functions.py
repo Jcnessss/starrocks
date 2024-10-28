@@ -191,6 +191,14 @@ vectorized_functions = [
     [10322, "square", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::square"],
     [10331, "is_finite", True, False, "BOOLEAN", ["FLOAT"], "MathFunctions::is_finite_float"],
     [10332, "is_finite", True, False, "BOOLEAN", ["DOUBLE"], "MathFunctions::is_finite_double"],
+    [10333, "is_infinite", True, False, "BOOLEAN", ["FLOAT"], "MathFunctions::is_infinite_float"],
+    [10334, "is_infinite", True, False, "BOOLEAN", ["DOUBLE"], "MathFunctions::is_infinite_double"],
+    [10335, "is_nan", True, False, "BOOLEAN", ["FLOAT"], "MathFunctions::is_nan_float"],
+    [10336, "is_nan", True, False, "BOOLEAN", ["DOUBLE"], "MathFunctions::is_nan_double"],
+    [10337, "nan", True , False , "DOUBLE" , [] , "MathFunctions::nan"],
+    [10338, "infinity", True, False,"DOUBLE" , [] ,"MathFunctions::infinity"],
+
+
 
     [10330, "cbrt", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::cbrt"],
 

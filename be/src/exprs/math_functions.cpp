@@ -210,6 +210,17 @@ DEFINE_MATH_UNARY_WITH_OUTPUT_NAN_CHECK_FN(log2, TYPE_DOUBLE, TYPE_DOUBLE);
 
 DEFINE_MATH_UNARY_FN_WITH_IMPL(is_finite_double, TYPE_DOUBLE, TYPE_BOOLEAN, std::isfinite);
 DEFINE_MATH_UNARY_FN_WITH_IMPL(is_finite_float, TYPE_FLOAT, TYPE_BOOLEAN, std::isfinite);
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_infinite_double, TYPE_DOUBLE, TYPE_BOOLEAN, std::isinf);
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_infinite_float, TYPE_FLOAT, TYPE_BOOLEAN, std::isinf);
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_nan_double, TYPE_DOUBLE, TYPE_BOOLEAN, std::isnan);
+DEFINE_MATH_UNARY_FN_WITH_IMPL(is_nan_float, TYPE_FLOAT, TYPE_BOOLEAN, std::isnan);
+StatusOr<ColumnPtr> MathFunctions::nan(FunctionContext* context, const Columns& columns) {
+    return ColumnHelper::create_const_column<TYPE_DOUBLE>(std::numeric_limits<double>::quiet_NaN(), 1);
+}
+
+StatusOr<ColumnPtr> MathFunctions::infinity(FunctionContext* context, const Columns& columns) {
+    return ColumnHelper::create_const_column<TYPE_DOUBLE>(std::numeric_limits<double>::infinity(), 1);
+}
 
 // square
 DEFINE_UNARY_FN_WITH_IMPL(squareImpl, v) {
