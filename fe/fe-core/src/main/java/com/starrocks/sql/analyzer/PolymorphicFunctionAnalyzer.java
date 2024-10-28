@@ -257,6 +257,7 @@ public class PolymorphicFunctionAnalyzer {
             .put(FunctionSet.getAggStateUnionName(FunctionSet.ARRAY_AGG), types -> types[0])
             .put(FunctionSet.getAggStateMergeName(FunctionSet.ARRAY_AGG), new ArrayAggMergeDeduce())
             .put(FunctionSet.MAP_AGG, new MapAggDeduce())
+            .put(FunctionSet.MIN_BY, types -> types[0])
             .build();
 
     private static Function resolveByDeducingReturnType(Function fn, Type[] inputArgTypes) {
