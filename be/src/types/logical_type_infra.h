@@ -158,6 +158,23 @@ auto type_dispatch_all(LogicalType ltype, Functor fun, Args... args) {
     }
 }
 
+template <class Functor, class... Args>
+auto type_dispatch_real_all(LogicalType ltype, Functor fun, Args... args) {
+    switch (ltype) {
+        APPLY_FOR_ALL_SCALAR_TYPE_WITH_NULL(_TYPE_DISPATCH_CASE)
+        _TYPE_DISPATCH_CASE(TYPE_ARRAY)
+        _TYPE_DISPATCH_CASE(TYPE_MAP)
+        _TYPE_DISPATCH_CASE(TYPE_STRUCT)
+        _TYPE_DISPATCH_CASE(TYPE_HLL)
+        _TYPE_DISPATCH_CASE(TYPE_OBJECT)
+        _TYPE_DISPATCH_CASE(TYPE_PERCENTILE)
+    default:
+        CHECK(false) << "Unknown type: " << ltype;
+        __builtin_unreachable();
+    }
+}
+
+
 // Types could build into columns
 template <class Functor, class... Args>
 auto type_dispatch_column(LogicalType ltype, Functor fun, Args... args) {

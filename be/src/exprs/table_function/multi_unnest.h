@@ -43,49 +43,56 @@ public:
             if (ColumnHelper::get_data_column(only_array->elements_column().get())->is_struct()) {
                 const auto* struct_column =
                         down_cast<const StructColumn*>(ColumnHelper::get_data_column(only_array->elements_column().get()));
-                std::vector<ColumnPtr> compacted_array_list;
+                std::vector<ColumnPtr> unnested_array_list;
                 for (auto& col_idx : struct_column->fields()) {
                     Column* column = col_idx.get();
-                    ColumnPtr compacted_array_elements = column->clone_empty();
-                    compacted_array_list.emplace_back(compacted_array_elements);
+                    auto* col_array = ColumnHelper::get_data_column(column);
+                    ColumnPtr unnested_array_elements = col_array->clone_empty();
+                    unnested_array_list.emplace_back(unnested_array_elements);
                 }
-                auto compacted_offset_column = UInt32Column::create();
-                long offset = 0;
-                compacted_offset_column->append(offset);
+                auto copy_count_column = UInt32Column::create();
+                uint32_t offset = 0;
+                copy_count_column->append(offset);
                 for (int row_idx = 0; row_idx < row_count; ++row_idx) {
-                    long overall_length = overall_offset_column->
-                                                  get(row_idx + 1).get_int32() - overall_offset_column->get(row_idx).get_int32();
-                    compacted_offset_column->append(offset + overall_length);
-                    offset += overall_length;
-
+                    uint32_t max_length_array_size = overall_offset_column->get(row_idx + 1).get_int32() -
+                                                     overall_offset_column->get(row_idx).get_int32();;
+                    if (max_length_array_size == 0 && state->get_is_left_join()) {
+                        offset += 1;
+                        copy_count_column->append(offset);
+                    } else {
+                        offset += max_length_array_size;
+                        copy_count_column->append(offset);
+                    }
                     for (int col_idx = 0; col_idx < struct_column->fields().size(); ++col_idx) {
                         Column* column = struct_column->fields()[col_idx].get();
-                        if ((ColumnHelper::get_data_column(column))->is_array()) {
-                            auto* col_array = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(column));
-                            auto offset_column = col_array->offsets_column();
-                            compacted_array_list[col_idx]->append(
-                                    *col_array, overall_offset_column->get(row_idx).get_int32(), overall_length);
+                        auto offset_column = overall_offset_column;
+                        auto* field = ColumnHelper::get_data_column(column);
+
+                        if (max_length_array_size == 0 && state->get_is_left_join()) {
+                            unnested_array_list[col_idx]->append_nulls(1);
                         } else {
-                            if (column->is_nullable() && column->has_null()) {
-                                auto* nullable_column = down_cast<NullableColumn*>(column);
-                                if (nullable_column->only_null()) {
-                                    compacted_array_list[col_idx]->append_nulls(overall_length);
-                                } else if (nullable_column->has_null()) {
-                                    compacted_array_list[col_idx]->append(*column, 0, overall_length - nullable_column->null_count());
-                                    compacted_array_list[col_idx]->append_nulls(nullable_column->null_count());
-                                }
+                            if (column->is_null(row_idx)) {
+                                // current row is null, ignore element data.
+                                unnested_array_list[col_idx]->append_nulls(max_length_array_size);
                             } else {
-                                compacted_array_list[col_idx]->append(*column, 0, overall_length);
+                                auto array_element_length =
+                                        offset_column->get(row_idx + 1).get_int32() - offset_column->get(row_idx).get_int32();
+                                unnested_array_list[col_idx]->append(*field,
+                                                                     offset_column->get(row_idx).get_int32(),
+                                                                     array_element_length);
+
+                                if (array_element_length < max_length_array_size) {
+                                    unnested_array_list[col_idx]->append_nulls(max_length_array_size - array_element_length);
+                                }
                             }
                         }
                     }
                 }
-
                 Columns result;
-                for (auto& col_idx : compacted_array_list) {
+                for (auto& col_idx : unnested_array_list) {
                     result.emplace_back(col_idx);
                 }
-                return std::make_pair(result, compacted_offset_column);
+                return std::make_pair(result, copy_count_column);
             }
         }
         std::vector<ColumnPtr> unnested_array_list;
