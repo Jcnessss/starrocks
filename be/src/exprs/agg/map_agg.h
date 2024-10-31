@@ -89,6 +89,9 @@ public:
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
+        if (column->is_nullable() && column->is_null(row_num)) {
+            return;
+        }
         auto map_column = down_cast<const MapColumn*>(ColumnHelper::get_data_column(column));
         auto& offsets = map_column->offsets().get_data();
         if (offsets[row_num + 1] > offsets[row_num]) {
@@ -104,6 +107,12 @@ public:
         auto* map_column = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
 
         auto elem_size = state_impl.hash_map.size();
+        // For nullable column with no result, return null.
+        if (elem_size == 0 && to->is_nullable()) {
+            down_cast<NullableColumn*>(to)->append_nulls(1);
+            return;
+        }
+
         auto* key_column = down_cast<KeyColumnType*>(ColumnHelper::get_data_column(map_column->keys_column().get()));
         if constexpr (lt_is_string<KT>) {
             for (const auto& entry : state_impl.hash_map) {
