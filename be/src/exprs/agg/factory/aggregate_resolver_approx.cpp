@@ -37,7 +37,7 @@ struct HLLUnionBuilder {
                     "ndv", false, AggregateFactory::MakeHllNdvAggregateFunction<lt>());
 
             resolver->add_aggregate_mapping<lt, TYPE_BIGINT, HyperLogLog>(
-                    "approx_count_distinct", false, AggregateFactory::MakeHllNdvAggregateFunction<lt>());
+                    "approx_count_distinct", true, AggregateFactory::MakeHllNdvAggregateFunction<lt>());
         }
     }
 };

@@ -1071,11 +1071,11 @@ public class FunctionSet {
             // alias of ndv, compute approx count distinct use HyperLogLog
             addBuiltin(AggregateFunction.createBuiltin(APPROX_COUNT_DISTINCT,
                     Lists.newArrayList(t), Type.BIGINT, Type.VARBINARY,
-                    true, false, true));
+                    true, true, true));
 
             addBuiltin(AggregateFunction.createBuiltin(APPROX_COUNT_DISTINCT,
                     Lists.newArrayList(t, Type.DOUBLE), Type.BIGINT, Type.VARBINARY,
-                    true, false, true));
+                    true, true, true));
 
             // HLL_RAW
             addBuiltin(AggregateFunction.createBuiltin(HLL_RAW,
