@@ -811,7 +811,8 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
         if (node.getOrderBy().isPresent()) {
             orderByElements = visit(node.getOrderBy().get(), context, OrderByElement.class);
         }
-        List<Expr> partitionExprs = visit(node.getPartitionBy(), context, Expr.class);
+        List<Expr> partitionExprs = visit(node.getPartitionBy(), context, Expr.class).stream()
+                .filter(x -> !x.isConstant()).collect(toList());
 
         return new AnalyticExpr(functionCallExpr, partitionExprs, orderByElements,
                 (AnalyticWindow) processOptional(node.getFrame(), context), null);
