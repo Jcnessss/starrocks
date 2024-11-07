@@ -181,6 +181,7 @@ public:
     static AggregateFunctionPtr MakeRetentionLostAggregateFunction();
     static AggregateFunctionPtr MakeDateCollectAggregateFunction();
     static AggregateFunctionPtr MakeBooleanOrAggregateFunction();
+    static AggregateFunctionPtr MakeFunnelFlowArrayAggregateFunction();
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();

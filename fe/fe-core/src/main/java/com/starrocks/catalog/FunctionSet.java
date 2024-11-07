@@ -495,6 +495,12 @@ public class FunctionSet {
     //user and role function
     public static final String IS_ROLE_IN_SESSION = "is_role_in_session";
 
+    // ThinkingData agg function
+    public static final String FUNNEL_FLOW_ARRAY = "funnel_flow_array";
+    public static final String FUNNEL_FLOW_ARRAY_DATE = "funnel_flow_array_date";
+    public static final String FUNNEL_PACKED_TIME_COLLECT = "funnel_packed_time_collect";
+    public static final String  FUNNEL_PACKED_TIME_COLLECT2 = "funnel_packed_time_collect2";
+
     public static final String QUARTERS_ADD = "quarters_add";
     public static final String QUARTERS_SUB = "quarters_sub";
     public static final String WEEKS_ADD = "weeks_add";
@@ -1272,6 +1278,8 @@ public class FunctionSet {
                     LEAD, Lists.newArrayList(t, Type.BIGINT), t, t));
         }
 
+        registerThinkingDataFunction();
+
         for (Type t : HISTOGRAM_TYPE) {
             addBuiltin(AggregateFunction.createBuiltin(HISTOGRAM,
                     Lists.newArrayList(t, Type.INT, Type.DOUBLE), Type.VARCHAR, Type.VARCHAR,
@@ -1527,6 +1535,22 @@ public class FunctionSet {
         registerBuiltinForTypes.accept(Type.DECIMAL_TYPES);
         registerBuiltinForTypes.accept(Type.STRING_TYPES);
         registerBuiltinForTypes.accept(Type.DATE_TYPES);
+    }
+
+    private void registerThinkingDataFunction(){
+
+        // Funnel Agg
+        addBuiltin(AggregateFunction.createBuiltin(FUNNEL_FLOW_ARRAY,
+                Lists.newArrayList(Type.BIGINT,Type.BIGINT), Type.ARRAY_INT, Type.ARRAY_INT,
+                false, true, false));
+//         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_FLOW_ARRAY_DATE,
+//                 Lists.newArrayList(Type.ANY_MAP,Type.BIGINT), Type.ANY_MAP, Type.ANY_MAP,
+//                 false, true, false));
+//        addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
+//
+//                ));
+//        addBuiltin();
+//        addBuiltin();
     }
 
     public List<Function> getBuiltinFunctions() {

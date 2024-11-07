@@ -24,6 +24,7 @@
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/retention_lost_date_collect_agg.h"
 #include "exprs/agg/retention_ta.h"
+#include "exprs/agg/ta_funnel.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -70,6 +71,7 @@ public:
     void register_utility();
     void register_approx();
     void register_others();
+    void register_thinkingdata();
     void register_retract_functions();
 
     const std::vector<LogicalType>& aggregate_types() const {
@@ -207,7 +209,10 @@ public:
             } else if (name == "retention_lost_date_collect_agg") {
                 auto retention_lost = AggregateFactory::MakeRetentionLostAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<RetentionLostState, false>(retention_lost);
-            } else if (name == "window_funnel") {
+            }else if (name == "funnel_flow_array"){
+                auto funnel_flow_array = AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<IntArrayState,false>(funnel_flow_array);
+            }else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {
                     auto windowfunnel = AggregateFactory::MakeWindowfunnelAggregateFunction<ArgLT>();
@@ -226,6 +231,8 @@ public:
                 return AggregateFactory::MakeDateCollectAggregateFunction();
             } else if (name == "retention_lost_date_collect_agg") {
                 return AggregateFactory::MakeRetentionLostAggregateFunction();
+            } else if(name == "funnel_flow_array"){
+                return AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {

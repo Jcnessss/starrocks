@@ -30,6 +30,8 @@
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
 
+#include "exprs/agg/ta_funnel.h"
+
 namespace starrocks {
 
 AggregateFuncResolver::AggregateFuncResolver() {
@@ -43,6 +45,7 @@ AggregateFuncResolver::AggregateFuncResolver() {
     register_utility();
     register_approx();
     register_others();
+    register_thinkingdata();
     register_retract_functions();
 }
 
@@ -81,6 +84,10 @@ AggregateFunctionPtr AggregateFactory::MakeBooleanOrAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {
     return std::make_shared<DateCollectFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
+    return std::make_shared<FunnelFlowArrayAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {

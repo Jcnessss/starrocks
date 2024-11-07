@@ -74,8 +74,6 @@ struct MaxMinByDispatcherInner {
     void operator()(AggregateFuncResolver* resolver) {
         if constexpr ((lt_is_aggregate<arg_type> || lt_is_json<arg_type>)&&(lt_is_aggregate<ret_type> ||
                 lt_is_json<ret_type> || lt_is_struct<ret_type> || lt_is_array<ret_type> || lt_is_map<ret_type>)) {
-            LOG(INFO) << "ee";
-            LOG(INFO) << type_to_string(arg_type) << "  " <<  type_to_string(ret_type);
             if constexpr (is_max_by) {
                 resolver->add_aggregate_mapping_notnull<arg_type, ret_type>(
                         "max_by", true, AggregateFactory::MakeMaxByAggregateFunction<arg_type, false>());
@@ -87,7 +85,6 @@ struct MaxMinByDispatcherInner {
                 resolver->add_aggregate_mapping_notnull<arg_type, ret_type>(
                         "min_by_v2", true, AggregateFactory::MakeMinByAggregateFunction<arg_type, true>());
             }
-            LOG(INFO) << "ee";
         }
     }
 };

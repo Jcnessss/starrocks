@@ -25,6 +25,7 @@ set(EXPR_FILES
   agg/factory/aggregate_resolver_others.cpp
   agg/factory/aggregate_resolver_sumcount.cpp
   agg/factory/aggregate_resolver_stream.cpp
+  agg/factory/aggregate_resolver_thinkingdata.cpp
   agg/factory/aggregate_resolver_utility.cpp
   agg/factory/aggregate_resolver_variance.cpp
   agg/factory/aggregate_resolver_window.cpp
