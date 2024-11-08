@@ -187,6 +187,32 @@ public class PolymorphicFunctionAnalyzer {
         }
     }
 
+    private static class ArrayAggStateDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            return FunctionAnalyzer.getArrayAggGroupConcatIntermediateType(FunctionSet.ARRAY_AGG,
+                    types, ImmutableList.of()).second;
+        }
+    }
+
+    private static class ArrayAggMergeDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            Type type0 = types[0];
+            Preconditions.checkArgument(type0 instanceof StructType);
+            StructType structType = (StructType) type0;
+            StructField field0 = structType.getField(0);
+            return field0.getType();
+        }
+    }
+
+    private static class MapAggDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            return new MapType(types[0], types[1]);
+        }
+    }
+
     private static final ImmutableMap<String, java.util.function.Function<Type[], Type>> DEDUCE_RETURN_TYPE_FUNCTIONS
             = ImmutableMap.<String, java.util.function.Function<Type[], Type>>builder()
             .put(FunctionSet.MAP_KEYS, new MapKeysDeduce())
@@ -205,6 +231,13 @@ public class PolymorphicFunctionAnalyzer {
             // it's mock, need handle it in expressionAnalyzer
             .put(FunctionSet.NAMED_STRUCT, new RowDeduce())
             .put(FunctionSet.ANY_VALUE, types -> types[0])
+            .put(FunctionSet.getAggStateName(FunctionSet.ANY_VALUE), types -> types[0])
+            .put(FunctionSet.getAggStateUnionName(FunctionSet.ANY_VALUE), types -> types[0])
+            .put(FunctionSet.getAggStateMergeName(FunctionSet.ANY_VALUE), types -> types[0])
+            .put(FunctionSet.getAggStateName(FunctionSet.ARRAY_AGG), new ArrayAggStateDeduce())
+            .put(FunctionSet.getAggStateUnionName(FunctionSet.ARRAY_AGG), types -> types[0])
+            .put(FunctionSet.getAggStateMergeName(FunctionSet.ARRAY_AGG), new ArrayAggMergeDeduce())
+            .put(FunctionSet.MAP_AGG, new MapAggDeduce())
             .build();
 
     private static Function resolveByDeducingReturnType(Function fn, Type[] inputArgTypes) {
