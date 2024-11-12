@@ -32,7 +32,7 @@ namespace starrocks {
 
 struct TimestampArray {
     int64_t* elements;
-    uint32_t size;
+    size_t size;
     int64_t operator[](int i) const noexcept { return elements[i]; }
     void add(int64_t timestamp) {
         elements[size++] = timestamp;
@@ -41,10 +41,10 @@ struct TimestampArray {
         return size == 0;
     }
     int64_t* begin() {
-        return elements;
+        return this->elements;
     }
     int64_t* end() {
-        return elements + size;
+        return this->elements + this->size;
     }
 };
 
@@ -215,7 +215,8 @@ static void toMatrix(const ColumnViewer<TYPE_BIGINT>& array,
                      int64_t* timestamps,
                      TimestampArray* stepTimestamps,
                      int64_t max_funnel_index) {
-    int32_t size[max_funnel_index];
+    size_t size[max_funnel_index];
+    memset(size, 0, sizeof(size_t)*max_funnel_index);
     for (size_t j = start; j < end; j++) {
         int64_t packed_time_millis = array.value(j);
         int32_t funnel_index = int32_t(packed_time_millis & FUNNEL_INDEX_MASK);
@@ -230,14 +231,15 @@ static void toMatrix(const ColumnViewer<TYPE_BIGINT>& array,
     }
     for (size_t j = start; j < end; j++) {
         int64_t packed_time_millis = array.value(j);
-        int32_t funnel_index = int32_t(packed_time_millis & FUNNEL_INDEX_MASK);
+        size_t funnel_index = size_t(packed_time_millis & FUNNEL_INDEX_MASK);
         if (funnel_index < 1 || funnel_index > max_funnel_index) {
             continue;
         }
-        int32_t f = funnel_index - 1;
-        stepTimestamps[f].add((packed_time_millis >> MILLIS_SHIFT));
+        size_t f = funnel_index - 1;
+        stepTimestamps[f].add(int64_t(packed_time_millis >> MILLIS_SHIFT));
     }
-    for (uint i = 0; i < max_funnel_index; i++) {
+
+    for (size_t i = 0; i < max_funnel_index; i++) {
         if (!stepTimestamps[i].empty()){
             std::sort(stepTimestamps[i].begin(), stepTimestamps[i].end());
         }
@@ -656,7 +658,7 @@ static phmap::flat_hash_map<int64_t, int64_t> funnel_max_step_date_inner(const C
         if (maxKey<=0) {
             maxStep=1;
         }else{
-            stepTimestamps[0] = TimestampArray{value.data(),static_cast<uint32_t>(value.size())};
+            stepTimestamps[0] = TimestampArray{value.data(),value.size()};
             maxKey = adjustStartPositions(stepTimestamps, value, maxKey);
             std::vector<int64_t> copy(positions.begin(), positions.begin() + maxKey + 1);
             maxStep = MaxStepFinder(stepTimestamps, maxKey,copy, windows_gap).find() + 1;

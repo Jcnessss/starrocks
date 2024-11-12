@@ -209,9 +209,12 @@ public:
             } else if (name == "retention_lost_date_collect_agg") {
                 auto retention_lost = AggregateFactory::MakeRetentionLostAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<RetentionLostState, false>(retention_lost);
-            }else if (name == "funnel_flow_array"){
+            }else if (name == "funnel_flow_array") {
                 auto funnel_flow_array = AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
-                return AggregateFactory::MakeNullableAggregateFunctionUnary<IntArrayState,false>(funnel_flow_array);
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<IntArrayState, false>(funnel_flow_array);
+            }else if (name == "funnel_packed_time_collect"){
+                auto funnel_packed_time_coolect = AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<FunnelPackedTimeCollectState, false>(funnel_packed_time_coolect);
             }else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {
@@ -231,8 +234,10 @@ public:
                 return AggregateFactory::MakeDateCollectAggregateFunction();
             } else if (name == "retention_lost_date_collect_agg") {
                 return AggregateFactory::MakeRetentionLostAggregateFunction();
-            } else if(name == "funnel_flow_array"){
+            } else if(name == "funnel_flow_array") {
                 return AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
+            }else if(name == "funnel_packed_time_collect"){
+                return AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {

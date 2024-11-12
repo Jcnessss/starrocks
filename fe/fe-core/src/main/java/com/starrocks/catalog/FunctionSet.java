@@ -1546,9 +1546,9 @@ public class FunctionSet {
 //         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_FLOW_ARRAY_DATE,
 //                 Lists.newArrayList(Type.ANY_MAP,Type.BIGINT), Type.ANY_MAP, Type.ANY_MAP,
 //                 false, true, false));
-//        addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
-//
-//                ));
+        addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
+                 Lists.newArrayList(Type.DATETIME,Type.BIGINT), Type.ARRAY_BIGINT, Type.ARRAY_BIGINT,
+                false, true, false));
 //        addBuiltin();
 //        addBuiltin();
     }

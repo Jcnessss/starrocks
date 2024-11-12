@@ -90,6 +90,10 @@ AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
     return std::make_shared<FunnelFlowArrayAggregateFunction>();
 }
 
+AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction() {
+    return std::make_shared<FunnelPackedTimeCollectAggregateFunction>();
+}
+
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {
     return std::make_shared<HllUnionAggregateFunction>();
 }
