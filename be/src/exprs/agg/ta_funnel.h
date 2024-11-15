@@ -184,13 +184,13 @@ public:
         auto* dst_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(dst->get()));
         dst_column->reserve(chunk_size);
         auto int_column = down_cast<Int64Column*>(dst_column->elements_column().get());
-        auto datetime_viewer = ColumnViewer<TYPE_DATETIME>(src[0]->clone_shared());
-        auto funnel_index_bitset = ColumnViewer<TYPE_BIGINT>(src[1]->clone_shared());
+        auto datetime_viewer = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(src[0].get()));
+        auto funnel_index_bitset = down_cast<const Int64Column*>(ColumnHelper::get_data_column(src[1].get()));
         size_t element_size = 0;
         for (size_t i = 0; i < chunk_size; ++i) {
-            auto datetime = datetime_viewer.value(i);
-            auto funnel_index = funnel_index_bitset.value(i);
-            if (datetime_viewer.is_null(i) || funnel_index_bitset.is_null(i)){
+            auto datetime = datetime_viewer->get(i).get_timestamp();
+            auto funnel_index = funnel_index_bitset->get(i).get_int64();
+            if (datetime_viewer->is_null(i) || funnel_index_bitset->is_null(i)){
                 dst_column->append_nulls(1);
                 continue;
             }

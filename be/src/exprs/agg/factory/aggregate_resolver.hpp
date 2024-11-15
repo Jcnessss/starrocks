@@ -20,6 +20,7 @@
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
+#include "exprs/agg/bit_agg.h"
 #include "exprs/agg/date_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/retention_lost_date_collect_agg.h"
@@ -212,9 +213,13 @@ public:
             }else if (name == "funnel_flow_array") {
                 auto funnel_flow_array = AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<IntArrayState, false>(funnel_flow_array);
-            }else if (name == "funnel_packed_time_collect"){
+            }else if (name == "funnel_packed_time_collect") {
                 auto funnel_packed_time_coolect = AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
-                return AggregateFactory::MakeNullableAggregateFunctionUnary<FunnelPackedTimeCollectState, false>(funnel_packed_time_coolect);
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<FunnelPackedTimeCollectState, false>(
+                        funnel_packed_time_coolect);
+            }else if (name == "bitwise_or_agg") {
+                auto bitwise_or_agg = AggregateFactory::MakeBitwishAggregateFunction();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<BitwishAggState, false>(bitwise_or_agg);
             }else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {
@@ -236,8 +241,10 @@ public:
                 return AggregateFactory::MakeRetentionLostAggregateFunction();
             } else if(name == "funnel_flow_array") {
                 return AggregateFactory::MakeFunnelFlowArrayAggregateFunction();
-            }else if(name == "funnel_packed_time_collect"){
+            }else if(name == "funnel_packed_time_collect") {
                 return AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
+            }else if(name=="bitwise_or_agg"){
+                return AggregateFactory::MakeBitwishAggregateFunction();
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {

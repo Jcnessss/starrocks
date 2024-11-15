@@ -501,6 +501,8 @@ public class FunctionSet {
     public static final String FUNNEL_PACKED_TIME_COLLECT = "funnel_packed_time_collect";
     public static final String  FUNNEL_PACKED_TIME_COLLECT2 = "funnel_packed_time_collect2";
 
+    public static final String BITWISE_OR_AGG = "bitwise_or_agg";
+
     public static final String QUARTERS_ADD = "quarters_add";
     public static final String QUARTERS_SUB = "quarters_sub";
     public static final String WEEKS_ADD = "weeks_add";
@@ -1549,6 +1551,10 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
                  Lists.newArrayList(Type.DATETIME,Type.BIGINT), Type.ARRAY_BIGINT, Type.ARRAY_BIGINT,
                 false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(BITWISE_OR_AGG,
+                Lists.newArrayList(Type.BIGINT),Type.BIGINT,Type.BIGINT,
+                false,true,false));
 //        addBuiltin();
 //        addBuiltin();
     }

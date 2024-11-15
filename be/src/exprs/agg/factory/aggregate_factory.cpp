@@ -21,6 +21,7 @@
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/bool_or.h"
+#include "exprs/agg/bit_agg.h"
 #include "exprs/agg/date_collect_ta.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
@@ -88,6 +89,10 @@ AggregateFunctionPtr AggregateFactory::MakeDateCollectAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
     return std::make_shared<FunnelFlowArrayAggregateFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeBitwishAggregateFunction() {
+    return std::make_shared<BitwishAggregateFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction() {

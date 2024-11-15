@@ -184,6 +184,8 @@ public:
     static AggregateFunctionPtr MakeFunnelFlowArrayAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();
 
+    static AggregateFunctionPtr MakeBitwishAggregateFunction();
+
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();
