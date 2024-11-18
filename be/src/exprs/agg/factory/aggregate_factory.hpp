@@ -189,6 +189,7 @@ public:
     static AggregateFunctionPtr MakeDateValueArrayCollectAggregateFunction();
     static AggregateFunctionPtr MakeBooleanOrAggregateFunction();
     static AggregateFunctionPtr MakeFunnelFlowArrayAggregateFunction();
+    static AggregateFunctionPtr MakeFunnelFlowArrayDateAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();
 
     static AggregateFunctionPtr MakeBitwishAggregateFunction();

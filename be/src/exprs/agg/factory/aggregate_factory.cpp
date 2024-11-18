@@ -122,6 +122,10 @@ AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
     return std::make_shared<FunnelFlowArrayAggregateFunction>();
 }
 
+AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayDateAggregateFunction(){
+        return std::make_shared<FunnelFlowArrayDateAggregateFunction>();
+}
+
 AggregateFunctionPtr AggregateFactory::MakeBitwishAggregateFunction() {
     return std::make_shared<BitwishAggregateFunction>();
 }

@@ -12,5 +12,7 @@ void AggregateFuncResolver::register_thinkingdata() {
                 "funnel_packed_time_collect", false, AggregateFactory::MakeFunnelPackedTimeAggregateFunction());
         add_aggregate_mapping_variadic<TYPE_BIGINT,TYPE_BIGINT,BitwishAggState>(
                 "bitwise_or_agg", false, AggregateFactory::MakeBitwishAggregateFunction());
+        add_aggregate_mapping_variadic<TYPE_BIGINT,TYPE_MAP,FunnelFlowArrayDate>(
+                "funnel_flow_array_date",false,AggregateFactory::MakeFunnelFlowArrayDateAggregateFunction());
     }
 }

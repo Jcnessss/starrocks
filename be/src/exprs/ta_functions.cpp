@@ -613,11 +613,10 @@ StatusOr<ColumnPtr> TaFunctions::funnel_max_step_date([[maybe_unused]]starrocks:
             key_builder.append(timestampValue);
             value_builder.append(value);
         }
-        new_offsets->append(result.size());
+        new_offsets->append(key_builder.data_column()->size());
     }
-    return MapColumn::create(key_builder.build(ColumnHelper::is_all_const(columns)),
-                             value_builder.build(ColumnHelper::is_all_const(columns)),
-                             new_offsets);
+//    auto map = MapColumn::create();
+    return MapColumn::create(key_builder.build_nullable_column(), value_builder.build_nullable_column(),new_offsets);
 }
 int64_t microsToMillis(int64_t micros) {
     return micros / 1000;
