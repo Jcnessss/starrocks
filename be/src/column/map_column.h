@@ -203,6 +203,8 @@ private:
     //                          m1vals [v1, v2, v3], m2vals [v4, v5, v6]
     // The two element array has three offsets(0, 3, 6)
     UInt32Column::Ptr _offsets;
+
+
 };
 
 } // namespace starrocks

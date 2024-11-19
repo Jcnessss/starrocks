@@ -507,7 +507,9 @@ public class FunctionSet {
     public static final String FUNNEL_FLOW_ARRAY = "funnel_flow_array";
     public static final String FUNNEL_FLOW_ARRAY_DATE = "funnel_flow_array_date";
     public static final String FUNNEL_PACKED_TIME_COLLECT = "funnel_packed_time_collect";
-    public static final String  FUNNEL_PACKED_TIME_COLLECT2 = "funnel_packed_time_collect2";
+    public static final String FUNNEL_PACKED_TIME_COLLECT2 = "funnel_packed_time_collect2";
+
+    public static final String TA_MAP_UNION_GREATEST = "ta_map_union_greatest";
 
     public static final String BITWISE_OR_AGG = "bitwise_or_agg";
 
@@ -1586,6 +1588,9 @@ public class FunctionSet {
                 false, true, false));
         addBuiltin(AggregateFunction.createBuiltin(BITWISE_OR_AGG,
                 Lists.newArrayList(Type.BIGINT),Type.BIGINT,Type.BIGINT,
+                false,true,false));
+        addBuiltin(AggregateFunction.createBuiltin(TA_MAP_UNION_GREATEST,
+                Lists.newArrayList(Type.MAP_DATETIME_BIGINT),Type.MAP_DATETIME_BIGINT,Type.MAP_DATETIME_BIGINT,
                 false,true,false));
     }
 

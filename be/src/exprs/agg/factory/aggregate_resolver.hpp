@@ -26,6 +26,7 @@
 #include "exprs/agg/retention_lost_date_collect_agg.h"
 #include "exprs/agg/retention_ta.h"
 #include "exprs/agg/ta_funnel.h"
+#include "exprs/agg/ta_utils.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -227,6 +228,9 @@ public:
             }else if (name == "bitwise_or_agg") {
                 auto bitwise_or_agg = AggregateFactory::MakeBitwishAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<BitwishAggState, false>(bitwise_or_agg);
+            }else if (name == "ta_map_union_greatest"){
+                auto ta_map_union_greatest = AggregateFactory::MakeTaMapUnionGreatest();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<MapUnionGreatestState, false>(ta_map_union_greatest);
             }else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {
@@ -256,6 +260,8 @@ public:
                 return AggregateFactory::MakeFunnelPackedTimeAggregateFunction2();
             }else if(name=="bitwise_or_agg"){
                 return AggregateFactory::MakeBitwishAggregateFunction();
+            }else if(name=="ta_map_union_greatest") {
+                return AggregateFactory::MakeTaMapUnionGreatest();
             } else if (name == "window_funnel") {
                 if constexpr (ArgLT == TYPE_INT || ArgLT == TYPE_BIGINT || ArgLT == TYPE_DATE ||
                               ArgLT == TYPE_DATETIME) {

@@ -193,6 +193,8 @@ public:
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction2();
 
+    static AggregateFunctionPtr MakeTaMapUnionGreatest();
+
     static AggregateFunctionPtr MakeBitwishAggregateFunction();
 
 

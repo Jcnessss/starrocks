@@ -39,6 +39,7 @@
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
 
+#include "exprs/agg/ta_utils.h"
 
 namespace starrocks {
 
@@ -176,6 +177,10 @@ AggregateFunctionPtr AggregateFactory::MakePercentRankWindowFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeNtileWindowFunction() {
     return std::make_shared<NtileWindowFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeTaMapUnionGreatest() {
+    return std::make_shared<MapUnionGreatestAggregateFunction>();
 }
 
 static const AggregateFunction* get_function(const std::string& name, LogicalType arg_type, LogicalType return_type,
