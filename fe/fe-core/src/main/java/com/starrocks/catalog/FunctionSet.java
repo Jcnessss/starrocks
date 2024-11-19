@@ -1581,6 +1581,9 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
                  Lists.newArrayList(Type.DATETIME,Type.BIGINT), Type.ARRAY_BIGINT, Type.ARRAY_BIGINT,
                 false, true, false));
+        addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT2,
+                Lists.newArrayList(Type.DATETIME,Type.BIGINT,Type.BIGINT), Type.ARRAY_BIGINT, Type.ARRAY_BIGINT,
+                false, true, false));
         addBuiltin(AggregateFunction.createBuiltin(BITWISE_OR_AGG,
                 Lists.newArrayList(Type.BIGINT),Type.BIGINT,Type.BIGINT,
                 false,true,false));

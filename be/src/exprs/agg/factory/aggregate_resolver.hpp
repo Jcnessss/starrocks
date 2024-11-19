@@ -220,6 +220,10 @@ public:
                 auto funnel_packed_time_coolect = AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<FunnelPackedTimeCollectState, false>(
                         funnel_packed_time_coolect);
+            }else if (name == "funnel_packed_time_collect2") {
+                auto funnel_packed_time_coolect = AggregateFactory::MakeFunnelPackedTimeAggregateFunction2();
+                return AggregateFactory::MakeNullableAggregateFunctionUnary<FunnelPackedTimeCollectState, false>(
+                        funnel_packed_time_coolect);
             }else if (name == "bitwise_or_agg") {
                 auto bitwise_or_agg = AggregateFactory::MakeBitwishAggregateFunction();
                 return AggregateFactory::MakeNullableAggregateFunctionUnary<BitwishAggState, false>(bitwise_or_agg);
@@ -248,6 +252,8 @@ public:
                 return AggregateFactory::MakeFunnelFlowArrayDateAggregateFunction();
             }else if(name == "funnel_packed_time_collect") {
                 return AggregateFactory::MakeFunnelPackedTimeAggregateFunction();
+            }else if(name == "funnel_packed_time_collect2"){
+                return AggregateFactory::MakeFunnelPackedTimeAggregateFunction2();
             }else if(name=="bitwise_or_agg"){
                 return AggregateFactory::MakeBitwishAggregateFunction();
             } else if (name == "window_funnel") {

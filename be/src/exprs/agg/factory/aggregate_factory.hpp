@@ -191,6 +191,7 @@ public:
     static AggregateFunctionPtr MakeFunnelFlowArrayAggregateFunction();
     static AggregateFunctionPtr MakeFunnelFlowArrayDateAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();
+    static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction2();
 
     static AggregateFunctionPtr MakeBitwishAggregateFunction();
 

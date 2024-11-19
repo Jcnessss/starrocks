@@ -134,8 +134,8 @@ AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction() {
     return std::make_shared<FunnelPackedTimeCollectAggregateFunction>();
 }
 
-AggregateFunctionPtr AggregateFactory::MakeDateValueArrayCollectAggregateFunction() {
-    return std::make_shared<DateValueArrayCollectFunction>();
+AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction2() {
+    return std::make_shared<FunnelPackedTimeCollectAggregateFunction2>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {
