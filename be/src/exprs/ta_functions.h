@@ -50,6 +50,14 @@ public:
 
     DEFINE_VECTORIZED_FN(is_retention_user_in_date_collect);
 
+    static int64_t microsToMillis(int64_t micros) {
+        return std::floor(micros / 1000);
+    }
+
+    static int64_t millisToMicros(int64_t millis) {
+        return millis * 1000;
+    }
+
 private:
     static void get_distribute_group_str_inner(double minVal, double maxVal, int64_t discreteLimit, int64_t number,double statVal, Slice* slice);
     static void getGroupStr(double statVal, int64_t d, double minVal, double maxVal,Slice* slice);
