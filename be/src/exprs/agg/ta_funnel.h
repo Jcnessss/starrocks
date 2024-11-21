@@ -13,20 +13,21 @@ namespace starrocks {
 // Function: funnel_flow_array
 struct IntArrayState{
     void init(int64_t totalStep){
-        this->_data=std::vector<int32_t>(totalStep,0);
+        this->_data.resize(totalStep);
         this->_init = true;
     }
     void reset(){
         this->_data.clear();
         this->_init = false;
     }
-    void update(const ColumnViewer<TYPE_BIGINT>& column, size_t start,size_t end){
+    void update(const Int64Column* column, size_t start,size_t end){
+        auto data_column = column->get_data();
         for (size_t i=0;i<_data.size();i++){
-            this->_data[i] += column.value(i+start);
+            this->_data[i] += data_column[i+start];
         }
     }
     bool _init = false;
-    std::vector<int32_t> _data = {};
+    std::vector<int64_t> _data = {};
 };
 
 class FunnelFlowArrayAggregateFunction final
@@ -51,8 +52,8 @@ public:
             return;
         }
         init_state_if_necessary(ctx, state);
-        auto elements = ColumnViewer<TYPE_BIGINT>(columns[0]->clone_shared());
-        for (size_t j = 0; j < elements.value(row_num); j++){
+        auto elements = down_cast<const Int64Column*>(ColumnHelper::get_data_column(columns[0]))->get_data();
+        for (size_t j = 0; j < elements[row_num]; j++){
             this->data(state)._data[j] += 1;
         }
     }
@@ -61,31 +62,54 @@ public:
         init_state_if_necessary(ctx, state);
         const auto* input_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column));
         auto offset = input_column->offsets();
-        auto elements = ColumnViewer<TYPE_BIGINT>(input_column->elements_column());
-        for(size_t i = 0;i < offset.size()-1; i++){
-            auto start = offset.get_data()[i];
-            auto end = offset.get_data()[i+1];
-            this->data(state).update(elements,start,end);
+        auto elements = down_cast<const Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()));
+        for(size_t i = 0;i < this->data(state)._data.size(); i++){
+            this->data(state)._data[i] += elements->get_data()[offset.get_data()[row_num]+i];
         }
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         auto dst = down_cast<ArrayColumn*>(to);
-        size_t size = data(state)._data.size();
-        for (int i = 0; i < size; ++i) {
-            dst->elements_column()->append_datum(data(state)._data[i]);
+        if (to->is_nullable()&& this->data(state)._data.size()==0) {
+            auto null_column = down_cast<NullableColumn*>(to)->null_column();
+            null_column->append(1);
+            return;
         }
-        dst->offsets_column()->append(size);
+        size_t size = data(state)._data.size();
+        auto data_column  = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
+        if (dst->elements().is_nullable()) {
+            auto null_column = down_cast<NullableColumn*>(dst->elements_column().get())->null_column();
+            null_column->append(0);
+        }
+       data_column->get_data().insert(data_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
+        dst->offsets_column()->append(dst->offsets_column()->get_data().back()+size);
+        if (to->is_nullable()){
+            auto null_column = down_cast<NullableColumn*>(to)->null_column();
+            null_column->append(0);
+        }
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         auto* array_column = down_cast<ArrayColumn*>(to);
+        if (to->is_nullable()&& this->data(state)._data.size()==0) {
+            auto null_column = down_cast<NullableColumn*>(to)->null_column();
+            null_column->append(1);
+            return;
+        }
+        auto data_column  = down_cast<Int64Column*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        if (array_column->elements().is_nullable()) {
+            auto null_column = down_cast<NullableColumn*>(array_column->elements_column().get())->null_column();
+            null_column->get_data().insert(null_column->get_data().end(),data(state)._data.size(),0);
+        }
         auto offset_column = array_column->offsets_column();
         size_t elem_size = data(state)._data.size();
-        for (int i = 0; i < elem_size; ++i) {
-            array_column->elements_column()->append_datum(data(state)._data[i]);
+        data_column->get_data().insert(data_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
+        offset_column->append(offset_column->get_data().back()+elem_size);
+        if (to->is_nullable()){
+            auto null_column = down_cast<NullableColumn*>(to)->null_column();
+            null_column->append(0);
         }
-        offset_column->append(elem_size);
+        offset_column->append(offset_column->get_data().back()+elem_size);
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
@@ -93,18 +117,20 @@ public:
         auto* dst_column = down_cast<ArrayColumn*>((*dst).get());
         dst_column->reserve(chunk_size);
 
-        auto elements = ColumnViewer<TYPE_BIGINT>(src[0]->clone_shared());
+        auto elements = down_cast<const Int64Column*>(ColumnHelper::get_data_column(src[0].get()))->get_data();
 
         int constant_num = ctx->get_num_constant_columns();
         auto total_step = ColumnHelper::get_const_value<TYPE_BIGINT>(ctx->get_constant_column(constant_num - 1));
 
+        auto dst_element_cloumn = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst_column->elements_column().get()));
+
         for (size_t i = 0; i < chunk_size; ++i) {
-            auto value = elements.value(i);
+            auto value = elements[i];
             for (int j = 0; j < total_step; j++){
                 if (j < value){
-                    dst_column->elements_column()->append_datum(1);
+                    dst_element_cloumn->append_datum(1);
                 }else{
-                    dst_column->elements_column()->append_datum(0);
+                    dst_element_cloumn->append_datum(0);
                 }
             }
             dst_column->offsets_column()->append_datum(i+1*total_step);
@@ -124,37 +150,38 @@ static const int32_t MILLIS_SHIFT = 12;
 struct FunnelPackedTimeCollectState{
     const static size_t DEFAULT_ARRAY_SIZE = 16;
     void init(){
-        this->_data = std::vector<int64_t>(DEFAULT_ARRAY_SIZE);
+        // this->_data.reserve(DEFAULT_ARRAY_SIZE);
         this->_init = true;
     }
     void reset(){
         this->_data.clear();
+        this->_init = false;
     }
-    void update(int64_t timestamp, int64_t funnel_index_bitset, int64_t funnel_index_start){
+    void update(const int64_t timestamp,const int64_t funnel_index_bitset,const int64_t funnel_index_start){
         for (int i =0;i<64;i++){
-            auto shifted = funnel_index_bitset >> i;
+            const auto shifted = (funnel_index_bitset|0U) >> i;
             if(shifted==0){
                 break;
             }
             if((shifted&1)==1){
                 auto funnel_packed_time = funnel_pack_time(timestamp,funnel_index_start+i);
-                this->_data.push_back(funnel_packed_time);
+                this->_data.emplace_back(funnel_packed_time);
             }
         }
     }
-    void insert(int64_t funnel_packed_time){
-        this->_data.push_back(funnel_packed_time);
+    void insert(const int64_t funnel_packed_time){
+        this->_data.emplace_back(funnel_packed_time);
     }
     std::vector<int64_t> _data = {};
     bool _init = false;
 
-    static int64_t funnel_pack_time(int64_t timestamp,int32_t funnel_index){
+    static int64_t funnel_pack_time(const int64_t timestamp,const int32_t funnel_index){
         if (funnel_index > FUNNEL_INDEX_MASK) {
             throw std::runtime_error("funnelIndex overflow: " + std::to_string(funnel_index));
         }
-        int64_t unix_timestamp = timestamp;
-        int64_t mills = unix_timestamp / 1000;
-        int64_t shiftedMills = mills << MILLIS_SHIFT;
+        const int64_t unix_timestamp = timestamp;
+        const int64_t mills = std::floor(unix_timestamp / 1000);
+        const int64_t shiftedMills = mills << MILLIS_SHIFT;
         if (shiftedMills >> MILLIS_SHIFT != mills) {
             throw std::runtime_error("Millis overflow: " + std::to_string(shiftedMills));
         }
@@ -165,13 +192,13 @@ struct FunnelPackedTimeCollectState{
 class FunnelPackedTimeCollectAggregateFunction
         : public AggregateFunctionBatchHelper<FunnelPackedTimeCollectState, FunnelPackedTimeCollectAggregateFunction> {
 private:
-    static int64_t funnel_pack_time(int64_t timestamp,int32_t funnel_index){
+    static int64_t funnel_pack_time(const int64_t timestamp, const int32_t funnel_index){
         if (funnel_index > FUNNEL_INDEX_MASK) {
             throw std::runtime_error("funnelIndex overflow: " + std::to_string(funnel_index));
         }
-        int64_t unix_timestamp = timestamp;
-        int64_t mills = unix_timestamp / 1000;
-        int64_t shiftedMills = mills << MILLIS_SHIFT;
+        const int64_t unix_timestamp = timestamp;
+        const int64_t mills = std::floor(unix_timestamp / 1000);
+        const int64_t shiftedMills = mills << MILLIS_SHIFT;
         if (shiftedMills >> MILLIS_SHIFT != mills) {
             throw std::runtime_error("Millis overflow: " + std::to_string(shiftedMills));
         }
@@ -188,24 +215,20 @@ public:
         auto* dst_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(dst->get()));
         dst_column->reserve(chunk_size);
         auto int_column = down_cast<Int64Column*>(dst_column->elements_column().get());
-        auto datetime_viewer = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(src[0].get()));
-        auto funnel_index_bitset = down_cast<const Int64Column*>(ColumnHelper::get_data_column(src[1].get()));
+        auto datetime_viewer = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(src[0].get()))->get_data();
+        auto funnel_index_bitset = down_cast<const Int64Column*>(ColumnHelper::get_data_column(src[1].get()))->get_data();
         size_t element_size = 0;
         for (size_t i = 0; i < chunk_size; ++i) {
-            auto datetime = datetime_viewer->get(i).get_timestamp();
-            auto funnel_index = funnel_index_bitset->get(i).get_int64();
-            if (datetime_viewer->is_null(i) || funnel_index_bitset->is_null(i)){
-                dst_column->append_nulls(1);
-                continue;
-            }
-            auto timestamp = datetime.to_unix_microsecond();
+            auto datetime = datetime_viewer[i];
+            auto const funnel_index = funnel_index_bitset[i];
+            auto const timestamp = datetime.to_unix_microsecond();
             for (int j = 0; j < 64; j++){
-                auto shifted = funnel_index >> j;
+                const auto shifted = (funnel_index|0U) >> j;
                 if(shifted==0){
                     break;
                 }
                 if((shifted&1)==1){
-                    auto funnel_packed_time = funnel_pack_time(timestamp,j);
+                    const auto funnel_packed_time = funnel_pack_time(timestamp,j);
                     int_column->append(funnel_packed_time);
                     element_size++;
                 }
@@ -224,24 +247,22 @@ public:
         }
         init_if_necessary(ctx, state);
 
-        auto datetime_viewer = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(columns[0]));
-        auto funnel_index_bitset = down_cast<const Int64Column*>(ColumnHelper::get_data_column(columns[1]));
+        auto datetime_viewer = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(columns[0]))->get_data();
+        auto funnel_index_bitset = down_cast<const Int64Column*>(ColumnHelper::get_data_column(columns[1]))->get_data();
 
         this->data(state).update(
-                datetime_viewer->get_data()[row_num].to_unix_microsecond(),
-                funnel_index_bitset->get_data()[row_num],1);
+                datetime_viewer[row_num].to_unix_microsecond(),
+                funnel_index_bitset[row_num],1);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
         init_if_necessary(ctx, state);
         auto* input_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column));
-        auto offset = input_column->offsets();
-        auto elements = down_cast<Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()));
-        size_t begin = offset.get_data()[row_num];
-        size_t end = offset.get_data()[row_num+1];
-        for(size_t i = begin;i < end; i++){
-            this->data(state).insert(elements->get_data()[i]);
-        }
+        auto offset = input_column->offsets().get_data();
+        auto elements = down_cast<Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()))->get_data();
+        size_t begin = offset[row_num];
+        size_t end = offset[row_num+1];
+        this->data(state)._data.insert(this->data(state)._data.end(),elements.begin()+begin,elements.begin()+end);
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
@@ -250,15 +271,12 @@ public:
             dst->null_column()->append(0);
         }
         auto dst = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
-        size_t size = this->data(state)._data.size();
+        const size_t size = this->data(state)._data.size();
 
-        NullableColumn* pNullableColumn;
+        const auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
         if (dst->elements_column()->is_nullable()){
-            pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
-        }
-        auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
-        for(size_t i=0 ;i < size; i++){
-            pNullableColumn->null_column()->append(0);
+            auto pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
+            pNullableColumn->null_column()->get_data().insert(pNullableColumn->null_column()->get_data().end(),size,0);
         }
         int_column->get_data().insert(int_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
         dst->offsets_column()->append(dst->offsets_column()->get_data().back()+size);
@@ -427,56 +445,64 @@ public:
 
 struct FunnelFlowArrayDate{
     void init(FunctionContext* ctx,size_t map_size){
-        if (!this->_init){
+        if (this->_init){
             return;
         }
         int constant_num = ctx->get_num_constant_columns();
         auto total_step = ColumnHelper::get_const_value<TYPE_BIGINT>(ctx->get_constant_column(constant_num - 1));
         this->_total_step = total_step;
-        // The whole element size is total_step * map_size
-        size_t vector_size = (total_step+1) * map_size;
-        this->_data = Int64Column::create_mutable();
-        this->_data->reserve(vector_size);
-        // Finish offset Column Init
-        this->_offsets = UInt32Column::create_mutable();
-        this->_offsets->resize(map_size+1);
-        this->_offsets->append_default();
         this->_init = true;
     }
 
     void reset(){
-        this->_data.reset();
-        this->_offsets.reset();
+        this->_data.clear();
         this->_init = false;
         this->_total_step = 0;
     }
 
     void update(const TimestampColumn* key_column,
                 const Int64Column* value_column,
-                size_t start,size_t end){
-        auto& data = down_cast<Int64Column*>(this->_data.get())->get_data();
-        auto& offsets = down_cast<UInt32Column*>(this->_offsets.get())->get_data();
-        for (size_t i = start; i < end; ++i) {
-            auto date_time = key_column->get_data()[i].to_unix_microsecond();
+                const size_t start,
+                const size_t end){
+        for (size_t i = start; i < end; i++) {
+            auto date_time = key_column->get_data()[i].to_unix_second();
             auto max_step = value_column->get_data()[i];
-            data.emplace_back(date_time);
-            for (int j = start+1; j < max_step; j++){
-                data.emplace_back(1);
+            auto column_size = this->_total_step;
+            if (!this->_data.contains(date_time)) {
+                this->_data[date_time] = std::vector<int64_t>(column_size, 0);
+                fill_n(this->_data[date_time].begin(), max_step, 1);
+                continue;
+            }
+            for (size_t k = 0; k<max_step;k++) {
+                this->_data[date_time][k]++;
             }
         }
-        offsets.push_back(data.size());
     }
 
-    void merge(const Int64Column* elements, size_t start, size_t end){
-        auto& data = down_cast<Int64Column*>(this->_data.get())->get_data();
+    void merge(const Int64Column* elements,
+        const size_t start,
+        const size_t end){
         const auto& elements_data = elements->get_data();
-        for (size_t i = start+1; i < end; ++i) {
-            data[i] += elements_data[i];
+        for (size_t i = start; i<end;i+=this->_total_step+1) {
+            if (auto key = elements_data[i]; !this->_data.contains(key)) {
+                std::vector<int64_t> value_vector = std::vector<int64_t>();
+                value_vector.insert(
+                    value_vector.begin(),
+                    elements_data.begin() + i + 1,
+                    elements_data.begin() + i + this->_total_step+1
+                );
+                this->_data[key] = value_vector;
+            } else {
+                // Update existing values
+                std::vector<int64_t> value_vector = this->_data[key];
+                for (size_t j = 0; j < this->_total_step; ++j) {
+                    value_vector[j] += elements_data[i + j + 1];
+                }
+                this->_data[key] = value_vector;
+            }
         }
     }
-
-    ColumnPtr _data = {};
-    ColumnPtr _offsets = {};
+    phmap::flat_hash_map<int64_t,std::vector<int64_t>> _data = {};
     int64_t _total_step = {};
     bool _init = false;
 };
@@ -498,7 +524,6 @@ public:
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
-        LOG(INFO)<< "Update";
         if((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()){
             return;
         }
@@ -508,93 +533,107 @@ public:
         auto keys = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(elements->keys_column().get()));
         auto values = down_cast<const Int64Column*>(ColumnHelper::get_data_column(elements->values_column().get()));
         auto offset = elements->offsets();
-        this->data(state).update(keys,values,
-                                 offset.get_data()[row_num],offset.get_data()[row_num+1]);
+        this->data(state).update(keys,values,offset.get_data()[row_num],offset.get_data()[row_num+1]);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
-        LOG(INFO)<< "Merge";
         const auto* input_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column));
-        init_if_necessary(ctx, state,1);
+        // init_if_necessary(ctx, state,input_column->offsets().size()-1);
         auto offset = input_column->offsets();
         auto elements = down_cast<const Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()));
         auto start = offset.get_data()[row_num];
         auto end = offset.get_data()[row_num+1];
+        if (!this->data(state)._init) {
+            auto constant_num = ctx->get_num_constant_columns();
+            auto total_step = ColumnHelper::get_const_value<TYPE_BIGINT>(ctx->get_constant_column(constant_num - 1));
+            this->data(state)._total_step =total_step;
+            this->data(state)._init = true;
+        }
         this->data(state).merge(elements,start,end);
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        LOG(INFO)<< "Serialize to column";
+        if (to->is_nullable()&& this->data(state)._data.size()==0) {
+            auto dst = down_cast<NullableColumn*>(to);
+            dst->null_column()->append(1);
+            return;
+        }
         if (to->is_nullable()){
             auto dst = down_cast<NullableColumn*>(to);
             dst->null_column()->append(0);
         }
-        auto* dst_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
-        auto data = down_cast<Int64Column*>(dst_column->elements_column().get())->get_data();
-        data.reserve(this->data(state)._data->size());
-        LOG(INFO)<< "Data size: "<<this->data(state)._data->size();
-        auto original_data = down_cast<Int64Column*>(this->data(state)._data.get())->get_data();
-        data.insert(data.end(),original_data.begin(),original_data.end());
-
-        auto offset = down_cast<UInt32Column*>(dst_column->elements_column().get())->get_data();
-        auto original_offset = down_cast<UInt32Column*>(this->data(state)._offsets.get())->get_data();
-        offset.reserve(original_offset.size());
-        offset.insert(offset.end(),original_offset.begin(),original_offset.end());
+        auto dst_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
+        if (dst_column->is_nullable()){
+            auto dst = down_cast<NullableColumn*>(to);
+            dst->null_column()->append(0);
+        }
+        if (dst_column->elements_column()->is_nullable()){
+            auto dst = down_cast<NullableColumn*>(dst_column->elements_column().get());
+            dst->null_column()->get_data().insert(dst->null_column()->get_data().end(),this->data(state)._data.size(),0);
+        }
+        auto data = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst_column->elements_column().get()));
+        size_t element_size = 0;
+        for (auto &[key,val]:this->data(state)._data) {
+            data->append(key);
+            element_size++;
+            data->get_data().insert(data->get_data().end(),val.begin(),val.end());
+            element_size+=this->data(state)._total_step;
+        }
+        auto offset = dst_column->offsets_column();
+        offset->append(offset->get_data().back()+element_size);
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        LOG(INFO)<< "Finalize to column";
+        if (to->is_nullable()&& this->data(state)._data.size()==0) {
+            auto dst = down_cast<NullableColumn*>(to);
+            dst->null_column()->append(1);
+            return;
+        }
         if (to->is_nullable()){
             auto dst = down_cast<NullableColumn*>(to);
             dst->null_column()->append(0);
         }
-        auto* map_column = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
-        if (map_column->is_nullable()){
-            auto dst = down_cast<NullableColumn*>(to);
-            dst->null_column()->append(0);
-        }
 
-        auto key_column = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(map_column->keys_column().get()));
-        if (key_column->is_nullable()){
+        auto map_column = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
+        size_t group_size = this->data(state)._data.size();
+
+        if (map_column->keys_column()->is_nullable()){
             auto dst = down_cast<NullableColumn*>(map_column->keys_column().get());
-            dst->null_column()->append(0);
-        }
+            dst->null_column()->get_data().insert(dst->null_column()->get_data().end(),group_size,0);
 
+        }
+        auto key_column = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(map_column->keys_column().get()));
         // QUESTION: This value column should be ArrayColumn or StructColumn?
-        auto value_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(map_column->values_column().get()));
-        if (value_column->is_nullable()){
+        if (map_column->values_column()->is_nullable()){
             auto dst = down_cast<NullableColumn*>(map_column->values_column().get());
-            dst->null_column()->append(0);
+            dst->null_column()->get_data().insert(dst->null_column()->get_data().end(),group_size,0);
         }
 
-        auto& offsets = map_column->offsets_column()->get_data();
+        auto value_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(map_column->values_column().get()));
+        if (value_column->elements_column()->is_nullable()){
+            auto dst = down_cast<NullableColumn*>(value_column->elements_column().get());
+            dst->null_column()->get_data().insert(dst->null_column()->get_data().end(),group_size*this->data(state)._total_step,0);
+        }
+
+        auto value_elemens = down_cast<Int64Column*>(ColumnHelper::get_data_column(value_column->elements_column().get()));
+
+        auto value_offset = value_column->offsets_column();
+
+        auto map_offsets = map_column->offsets_column();
         // Init the offset
-
-        auto data_viewer = down_cast<Int64Column*>(data(state)._data.get())->get_data();
-        auto offset_viewer = down_cast<UInt32Column*>(data(state)._offsets.get())->get_data();
-
-        offsets.reserve(offset_viewer.size());
-        for (size_t i=0;i<offset_viewer.size()-1;i++){
-            // Get the start and end index of the data
-            auto start = offset_viewer[i];
-            auto end = offset_viewer[i+1];
-            // Append the key
-            TimestampValue key = TimestampValue::create_from_unixtime(data_viewer[start],cctz::utc_time_zone());
-            key_column->append(key);
-            // Append the value
-            key_column->append(key);
-            DatumArray array;
-            LOG(INFO)<< "Data size: "<<end - start;
-            array.reserve(end-start-1);
-            array.insert(array.end(),data_viewer.begin()+start+1,data_viewer.begin()+end);
-            value_column->append_datum(Datum(array));
-            offsets.push_back(i);
+        value_elemens->get_data().reserve(group_size*this->data(state)._total_step);
+        for (auto [key,val]:this->data(state)._data) {
+            TimestampValue dst_key = TimestampValue::create_from_unixtime(key,cctz::utc_time_zone());
+            dst_key.trunc_to_day();
+            key_column->append(dst_key);
+            value_elemens->get_data().insert(value_elemens->get_data().end(),val.begin(),val.end());
+            value_offset->append(value_offset->get_data().back()+val.size());
         }
+        map_offsets->append(map_offsets->get_data().back()+this->data(state)._data.size());
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
                                      ColumnPtr* dst) const override {
-        LOG(INFO)<< "Convert to serialize format";
         auto* dst_column = down_cast<ArrayColumn*>((*dst).get());
         dst_column->reserve(chunk_size);
 
@@ -610,7 +649,7 @@ public:
 
         dst_column->elements_column()->reserve(chunk_size*total_step+1);
 
-        auto element_column = down_cast<Int64Column*>(dst_column->elements_column().get())->get_data();
+        auto element_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst_column->elements_column().get()))->get_data();
 
         for (size_t i = 0; i < chunk_size; ++i) {
             auto key = keys[i];

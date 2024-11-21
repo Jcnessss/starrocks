@@ -1575,10 +1575,10 @@ public class FunctionSet {
 
         // Funnel Agg
         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_FLOW_ARRAY,
-                Lists.newArrayList(Type.BIGINT,Type.BIGINT), Type.ARRAY_INT, Type.ARRAY_INT,
+                Lists.newArrayList(Type.BIGINT,Type.BIGINT), Type.BIGINT, Type.BIGINT,
                 false, true, false));
         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_FLOW_ARRAY_DATE,
-                Lists.newArrayList(Type.ANY_MAP,Type.BIGINT), Type.ARRAY_BIGINT, Type.ANY_MAP,
+                Lists.newArrayList(Type.MAP_DATETIME_BIGINT,Type.BIGINT), Type.MAP_DATETIME_ARRAY_BIGINT, Type.ARRAY_BIGINT,
                 false, true, false));
         addBuiltin(AggregateFunction.createBuiltin(FUNNEL_PACKED_TIME_COLLECT,
                  Lists.newArrayList(Type.DATETIME,Type.BIGINT), Type.ARRAY_BIGINT, Type.ARRAY_BIGINT,

@@ -153,6 +153,10 @@ public abstract class Type implements Cloneable {
     public static final Type ARRAY_DECIMAL64 = new ArrayType(Type.DECIMAL64);
     public static final Type ARRAY_DECIMAL128 = new ArrayType(Type.DECIMAL128);
 
+    public static final Type MAP_DATETIME_ARRAY_BIGINT = new MapType(Type.DATETIME, Type.ARRAY_BIGINT);
+
+    public static final Type MAP_DATETIME_BIGINT = new MapType(Type.DATETIME, Type.BIGINT);
+
     public static final Type MAP_VARCHAR_VARCHAR = new MapType(Type.VARCHAR, Type.VARCHAR);
 
     public static final ImmutableList<ScalarType> INTEGER_TYPES =
