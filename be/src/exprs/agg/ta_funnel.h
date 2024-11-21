@@ -144,7 +144,7 @@ public:
 
 
 static const int64_t DAY_GAP_MILLS = 86400000L;
-static const int64_t FUNNEL_INDEX_MASK = 0xFFF;
+static const int32_t FUNNEL_INDEX_MASK = 0xFFF;
 static const int32_t MILLIS_SHIFT = 12;
 
 struct FunnelPackedTimeCollectState{
@@ -288,14 +288,12 @@ public:
         }
 
         auto dst = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
-        NullableColumn* pNullableColumn;
-        if (dst->elements_column()->is_nullable()){
-            pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
-        }
+
         size_t elem_size = data(state)._data.size();
         auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
-        for (int i = 0; i < elem_size; ++i) {
-            pNullableColumn->null_column()->append(0);
+        if (dst->elements_column()->is_nullable()){
+            auto pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
+            pNullableColumn->null_column()->get_data().resize(pNullableColumn->null_column()->get_data().size()+elem_size);
         }
         int_column->get_data().insert(int_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
         dst->offsets_column()->append(dst->offsets_column()->get_data().back()+elem_size);
@@ -312,7 +310,7 @@ private:
             throw std::runtime_error("funnelIndex overflow: " + std::to_string(funnel_index));
         }
         int64_t unix_timestamp = timestamp;
-        int64_t mills = unix_timestamp / 1000;
+        int64_t mills = std::floor(unix_timestamp / 1000);
         int64_t shiftedMills = mills << MILLIS_SHIFT;
         if (shiftedMills >> MILLIS_SHIFT != mills) {
             throw std::runtime_error("Millis overflow: " + std::to_string(shiftedMills));
@@ -340,7 +338,7 @@ public:
             auto funnel_index2 = funnel_index_bitset2[i];
             auto timestamp = datetime.to_unix_microsecond();
             for (int j = 0; j < 64; j++){
-                auto shifted = funnel_index >> j;
+                auto shifted = (funnel_index|0U) >> j;
                 if(shifted==0){
                     break;
                 }
@@ -351,7 +349,7 @@ public:
                 }
             }
             for (int j = 0; j < 64; j++){
-                auto shifted = funnel_index2 >> j;
+                auto shifted = (funnel_index2|0U) >> j;
                 if(shifted==0){
                     break;
                 }
@@ -391,12 +389,12 @@ public:
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
         init_if_necessary(ctx, state);
         auto* input_column = down_cast<const ArrayColumn*>(ColumnHelper::get_data_column(column));
-        auto offset = input_column->offsets();
-        auto elements = down_cast<Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()));
-        size_t begin = offset.get_data()[row_num];
-        size_t end = offset.get_data()[row_num+1];
+        auto offset = input_column->offsets().get_data();
+        auto elements = down_cast<Int64Column*>(ColumnHelper::get_data_column(input_column->elements_column().get()))->get_data();
+        size_t begin = offset[row_num];
+        size_t end = offset[row_num+1];
         for(size_t i = begin;i < end; i++){
-            this->data(state).insert(elements->get_data()[i]);
+            this->data(state).insert(elements[i]);
         }
     }
 
@@ -408,16 +406,14 @@ public:
         auto dst = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
         size_t size = this->data(state)._data.size();
 
-        NullableColumn* pNullableColumn;
-        if (dst->elements_column()->is_nullable()){
-            pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
-        }
         auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
-        for(size_t i=0 ;i < size; i++){
-            pNullableColumn->null_column()->append(0);
+        auto offset = dst->offsets_column();
+        if (dst->elements_column()->is_nullable()){
+            auto pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
+            pNullableColumn->null_column()->get_data().resize(pNullableColumn->null_column()->get_data().size()+size);
         }
         int_column->get_data().insert(int_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
-        dst->offsets_column()->append(dst->offsets_column()->get_data().back()+size);
+        offset->append(offset->get_data().back()+size);
     }
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         if (to->is_nullable()){
@@ -426,16 +422,14 @@ public:
         }
 
         auto dst = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(to));
-        NullableColumn* pNullableColumn;
-        if (dst->elements_column()->is_nullable()){
-            pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
-        }
+
         size_t elem_size = data(state)._data.size();
-        auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
-        for (int i = 0; i < elem_size; ++i) {
-            pNullableColumn->null_column()->append(0);
+        auto int_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()))->get_data();
+        if (dst->elements_column()->is_nullable()){
+            auto pNullableColumn = down_cast<NullableColumn*>(dst->elements_column().get());
+            pNullableColumn->null_column()->get_data().resize(pNullableColumn->null_column()->get_data().size()+elem_size);
         }
-        int_column->get_data().insert(int_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
+        int_column.insert(int_column.end(),data(state)._data.begin(),data(state)._data.end());
         dst->offsets_column()->append(dst->offsets_column()->get_data().back()+elem_size);
     }
     std::string get_name() const override { return "funnel_packed_time_collect"; }

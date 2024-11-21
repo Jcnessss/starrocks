@@ -119,6 +119,10 @@ AggregateFunctionPtr AggregateFactory::MakeDateValueCollectAggregateFunction() {
     return std::make_shared<DateValueCollectFunction>();
 }
 
+AggregateFunctionPtr AggregateFactory::MakeDateValueArrayCollectAggregateFunction() {
+    return std::make_shared<DateValueArrayCollectFunction>();
+}
+
 AggregateFunctionPtr AggregateFactory::MakeFunnelFlowArrayAggregateFunction() {
     return std::make_shared<FunnelFlowArrayAggregateFunction>();
 }
