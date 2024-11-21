@@ -30,6 +30,13 @@
 
 namespace starrocks {
 
+static inline uint64_t bool_values[] = {(1UL << 31) - 1, (1UL << 30) - 1, (1UL << 29) - 1, (1UL << 28) - 1, (1UL << 27) - 1,
+                                        (1UL << 26) - 1, (1UL << 25) - 1, (1UL << 24) - 1, (1UL << 23) - 1, (1UL << 22) - 1,
+                                        (1UL << 21) - 1, (1UL << 20) - 1, (1UL << 19) - 1, (1UL << 18) - 1, (1UL << 17) - 1,
+                                        (1UL << 16) - 1, (1UL << 15) - 1, (1UL << 14) - 1, (1UL << 13) - 1, (1UL << 12) - 1,
+                                        (1UL << 11) - 1, (1UL << 10) - 1, (1UL << 9) - 1, (1UL << 8) - 1, (1UL << 7) - 1,
+                                        (1UL << 6) - 1, (1UL << 5) - 1, (1UL << 4) - 1, (1UL << 3) - 1, (1UL << 2) - 1, (1UL << 1) - 1};
+
 struct TimestampArray {
     int64_t* elements;
     size_t size;
@@ -684,4 +691,163 @@ int adjustStartPositions(TimestampArray* stepTimestamps, std::vector<int64_t>& p
     }
     return maxKey;
 }
+
+int week(DateValue v) {
+    auto julian_day = v.julian();
+
+    return julian_day  / 7 + 1;
+}
+
+int month(DateValue v) {
+    int y, m, d;
+    v.to_date(&y, &m, &d);
+    return m;
+}
+
+int year(DateValue v) {
+    int y, m, d;
+    v.to_date(&y, &m, &d);
+    return y;
+}
+
+int get_unit_diff(DateValue value, DateValue init_date, const std::string _time_unit) {
+    int diff = 0;
+    if (_time_unit == "day") {
+        diff = value.julian() - init_date.julian();
+    } else if (_time_unit == "week") {
+        diff = week(value) - week(init_date);
+    } else if (_time_unit == "month") {
+        int init_year = year(init_date);
+        int value_year = year(value);
+        diff = month(value) - month(init_date) + (value_year - init_year) * 12;
+    }
+    return std::abs(diff);
+}
+
+StatusOr<ColumnPtr> TaFunctions::is_retention_user_in_date_collect(FunctionContext* context, const Columns& columns) {
+    const int64_t split = 0xFFFFFFFF;
+
+    auto init_viewer = ColumnViewer<TYPE_VARBINARY>(columns[0]);
+    auto return_viewer = ColumnViewer<TYPE_VARBINARY>(columns[1]);
+
+    ColumnPtr column = context->get_constant_column(2);
+    TimestampValue timestamp = ColumnHelper::get_const_value<TYPE_DATETIME>(column);
+    DateValue init_date = DateValue{timestamp::to_julian(timestamp._timestamp)};
+    ColumnPtr column2 = context->get_constant_column(3);
+    auto unit_num = ColumnHelper::get_const_value<TYPE_INT>(column2);
+    ColumnPtr column3 = context->get_constant_column(4);
+    auto unit = ColumnHelper::get_const_value<TYPE_VARCHAR>(column3).to_string();
+    ColumnPtr column4 = context->get_constant_column(5);
+    auto type = ColumnHelper::get_const_value<TYPE_INT>(column4);
+
+    int max_month_diff = 0;
+    if (unit == "day") {
+        max_month_diff = unit_num / 28 + 1;
+    } else if (unit == "week") {
+        max_month_diff = unit_num / 4 + 1;
+    } else if (unit == "month") {
+        max_month_diff = unit_num;
+    }
+
+    int init_year, init_month, init_day;
+    init_date.to_date(&init_year, &init_month, &init_day);
+    int32_t init_key = init_year * 100 + init_month;
+
+    ColumnBuilder<TYPE_BOOLEAN> res(columns[0]->size());
+
+    for (int row_num = 0; row_num < columns[0]->size(); row_num++) {
+        Slice init = init_viewer.value(row_num);
+        Slice return_date = return_viewer.value(row_num);
+        std::map<int, std::vector<DateValue>> init_dates;
+        if (init.size == 0 || return_date.size == 0) {
+            continue ;
+        }
+        size_t offset = 0;
+        size_t size;
+        std::memcpy(&size, init.data + offset, sizeof(size_t));
+        if (size == 0) {
+            continue ;
+        }
+        offset += sizeof(size_t);
+        bool is_found = false;
+        for (int i = 0; i < size; i++) {
+            uint64_t date;
+            std::memcpy(&date, init.data + offset, sizeof(uint64_t));
+            offset += sizeof(uint64_t);
+            int year_month = date >> 32;
+            if (year_month > init_key) {
+                is_found = false;
+                break;
+            }
+            if (year_month < init_key) {
+                continue ;
+            }
+            uint32_t bitmap = date & split;
+            while (bitmap > 0) {
+                int day = __builtin_clz(bitmap) + 1;
+                DateValue v;
+                v.from_date(year_month / 100, year_month % 100, day);
+                if (day == init_day) {
+                    is_found = true;
+                    break;
+                }
+                bitmap &= bool_values[day - 1];
+            }
+            if (is_found) {
+                break;
+            }
+        }
+        if (!is_found) {
+            res.append(false);
+            continue ;
+        }
+
+        offset = 0;
+        std::memcpy(&size, return_date.data + offset, sizeof(size_t));
+        offset += sizeof(size_t);
+        is_found = false;
+        for (int i = 0; i < size; i++) {
+            uint64_t date;
+            std::memcpy(&date, return_date.data + offset, sizeof(uint64_t));
+            offset += sizeof(uint64_t);
+            int year_month = date >> 32;
+            int year = year_month / 100;
+            int month = year_month % 100;
+            uint32_t bitmap = date & split;
+            if (year_month > init_key + max_month_diff) {
+                is_found = false;
+                break;
+            }
+            while (bitmap > 0) {
+                int day = __builtin_clz(bitmap) + 1;
+                DateValue v;
+                v.from_date(year, month, day);
+                int diff = get_unit_diff(v, init_date, unit);
+                if (diff > unit_num - 1 && v > init_date) {
+                    break;
+                }
+                if (type == 0) {
+                    if (diff == unit_num - 1 && v >= init_date) {
+                        is_found = true;
+                        break;
+                    }
+                } else {
+                    if (diff <= unit_num - 1 && v <= init_date) {
+                        is_found = true;
+                        break;
+                    }
+                }
+                bitmap &= bool_values[day - 1];
+            }
+            if (is_found) {
+                break;
+            }
+        }
+        res.append(is_found & !type);
+    }
+    return res.build(ColumnHelper::is_all_const(columns));
+}
+
+
+
 } // namespace starrocks
