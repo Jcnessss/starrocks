@@ -49,10 +49,13 @@ struct RetentionLostValueState {
                 size_t row_num) {
         Slice init = init_column->get(row_num).get_slice();
         Slice return_date = return_column->get(row_num).get_slice();
+        if (init.size == 0 || return_date.size == 0) {
+            return ;
+        }
         std::map<int, std::vector<DateValue>> init_dates;
         parse_init_dates(init, &init_dates);
         std::unordered_map<int, bool> is_found;
-        if (init_dates.size() == 0 || return_date.size == 0) {
+        if (init_dates.size() == 0) {
             return ;
         }
         is_found.reserve(init_dates.size() * (2 * _time_unit_num + 2));
