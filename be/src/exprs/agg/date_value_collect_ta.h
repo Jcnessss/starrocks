@@ -100,13 +100,6 @@ public:
         Bytes& bytes = dst->get_bytes();
         size_t offset = bytes.size();
         size_t size = copy.size();
-        if (size == 0) {
-            dst->get_offset().emplace_back(offset);
-            if (to->is_nullable()) {
-                down_cast<NullableColumn*>(to)->null_column()->append(1);
-            }
-            return ;
-        }
 
         bytes.resize(bytes.size() + sizeof(size_t) + size * (sizeof(int32_t) + sizeof(double)));
         std::memcpy(bytes.data() + offset, &size, sizeof(size_t));

@@ -66,7 +66,7 @@ struct RetentionLostQuotaState {
         if (init_dates.size() == 0 || return_date.size == 0) {
             return ;
         }
-        is_found.reserve(init_dates.size() * (2 * _time_unit_num + 2));
+        is_found.reserve(init_dates.size());
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, return_date.data + offset, sizeof(size_t));
@@ -108,15 +108,15 @@ struct RetentionLostQuotaState {
                             break ;
                         }
                         int diff = get_unit_diff(init_date, v);
-                        int key = (init_date.julian() << 16) + diff;
-                        if (diff <= _time_unit_num && !is_found.contains(key)) {
+                        int key = init_date.julian();
+                        if (diff <= _time_unit_num) {
                             res[date_to_index[init_date.julian()]][diff + 2]++;
-                            if (diff > 0 && pre_date <= init_date) {
+                            if (diff > 0 && pre_date <= init_date && !is_found.contains(key)) {
                                 for (int j = 4 + _time_unit_num + diff; j < res[0].size(); j++) {
                                     res[date_to_index[init_date.julian()]][j]--;
                                 }
+                                is_found[key] = true;
                             }
-                            is_found[key] = true;
                         }
                     }
                     tmp_it++;

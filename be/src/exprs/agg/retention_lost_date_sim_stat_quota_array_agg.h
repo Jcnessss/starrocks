@@ -52,16 +52,16 @@ struct RetentionLostValueQuotaState {
                 size_t row_num) {
         Slice init = init_column->get(row_num).get_slice();
         Slice return_date = return_column->get(row_num).get_slice();
-        if (init.size == 0 || return_date.size == 0) {
+        if (init.size == 0) {
             return ;
         }
         std::map<int, std::vector<DateValue>> init_dates;
         parse_init_dates(init, &init_dates);
         std::unordered_map<int, bool> is_found;
-        if (init_dates.size() == 0) {
+        if (init_dates.size() == 0 || return_date.size == 0) {
             return ;
         }
-        is_found.reserve(init_dates.size() * (2 * _time_unit_num + 2));
+        is_found.reserve(init_dates.size());
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, return_date.data + offset, sizeof(size_t));
@@ -70,7 +70,7 @@ struct RetentionLostValueQuotaState {
         }
         offset += sizeof(size_t);
         auto it = init_dates.begin();
-        phmap::flat_hash_map<int32_t, double> date_to_value;
+        std::unordered_map<int32_t, double> date_to_value;
         for (int i = 0; i < size; i++) {
             uint64_t date;
             std::memcpy(&date, return_date.data + offset, sizeof(uint64_t));
@@ -101,24 +101,28 @@ struct RetentionLostValueQuotaState {
                             break ;
                         }
                         int diff = get_unit_diff(init_date, v);
-                        int key = (init_date.julian() << 16) + diff;
-                        if (diff <= _time_unit_num && !is_found.contains(key)) {
+                        int key = init_date.julian();
+                        if (diff <= _time_unit_num) {
                             res[date_to_index[init_date.julian()]][diff + 2]++;
-                            if (diff > 0 && pre_date <= init_date) {
+                            if (diff > 0 && pre_date <= init_date && !is_found.contains(key)) {
                                 for (int j = 4 + _time_unit_num + diff; j < res[0].size(); j++) {
                                     res[date_to_index[init_date.julian()]][j]--;
+                                    is_found[key] = true;
                                 }
                             }
-                            is_found[key] = true;
                             if (date_to_value.empty()) {
                                 deserialize_values(value_column->get(row_num).get_slice(), &date_to_value);
                             }
                             if (_compute_type > 2) {
-                                for (int j = diff; j < _time_unit_num + 1; j++) {
-                                    sum[date_to_index[init_date.julian()]][j] += date_to_value[v.julian()];
+                                if (date_to_value.contains(v.julian())) {
+                                    for (int j = diff; j < _time_unit_num + 1; j++) {
+                                        sum[date_to_index[init_date.julian()]][j] += date_to_value[v.julian()];
+                                    }
                                 }
                             } else {
-                                sum[date_to_index[init_date.julian()]][diff] += date_to_value[v.julian()];
+                                if (date_to_value.contains(v.julian())) {
+                                    sum[date_to_index[init_date.julian()]][diff] += date_to_value[v.julian()];
+                                }
                             }
                         }
                     }
@@ -130,7 +134,10 @@ struct RetentionLostValueQuotaState {
         }
     }
 
-    void deserialize_values(Slice serialized, phmap::flat_hash_map<int32_t, double>* date_to_value) {
+    void deserialize_values(Slice serialized, std::unordered_map<int32_t, double>* date_to_value) {
+        if (serialized.size == 0) {
+            return;
+        }
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, serialized.data + offset, sizeof(size_t));

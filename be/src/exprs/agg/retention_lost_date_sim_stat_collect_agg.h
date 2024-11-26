@@ -49,16 +49,16 @@ struct RetentionLostValueState {
                 size_t row_num) {
         Slice init = init_column->get(row_num).get_slice();
         Slice return_date = return_column->get(row_num).get_slice();
-        if (init.size == 0 || return_date.size == 0) {
+        if (init.size == 0) {
             return ;
         }
         std::map<int, std::vector<DateValue>> init_dates;
         parse_init_dates(init, &init_dates);
         std::unordered_map<int, bool> is_found;
-        if (init_dates.size() == 0) {
+        if (init_dates.size() == 0 || return_date.size == 0) {
             return ;
         }
-        is_found.reserve(init_dates.size() * (2 * _time_unit_num + 2));
+        is_found.reserve(init_dates.size());
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, return_date.data + offset, sizeof(size_t));
@@ -66,8 +66,8 @@ struct RetentionLostValueState {
             return;
         }
         offset += sizeof(size_t);
-        auto it = init_dates.begin();
         phmap::flat_hash_map<int32_t, double> date_to_value;
+        auto it = init_dates.begin();
         for (int i = 0; i < size; i++) {
             uint64_t date;
             std::memcpy(&date, return_date.data + offset, sizeof(uint64_t));
@@ -98,24 +98,28 @@ struct RetentionLostValueState {
                             break ;
                         }
                         int diff = get_unit_diff(init_date, v);
-                        int key = (init_date.julian() << 16) + diff;
-                        if (diff <= _time_unit_num && !is_found.contains(key)) {
+                        int key = init_date.julian();
+                        if (diff <= _time_unit_num) {
                             res[date_to_index[init_date.julian()]][diff + 2]++;
-                            if (diff > 0 && pre_date <= init_date) {
+                            if (diff > 0 && pre_date <= init_date && !is_found[key]) {
                                 for (int j = 4 + _time_unit_num + diff; j < res[0].size(); j++) {
                                     res[date_to_index[init_date.julian()]][j]--;
                                 }
+                                is_found[key] = true;
                             }
-                            is_found[key] = true;
                             if (date_to_value.empty()) {
                                 deserialize_values(value_column->get(row_num).get_slice(), &date_to_value);
                             }
                             if (_compute_type > 2) {
-                                for (int j = diff; j < _time_unit_num + 1; j++) {
-                                    sum[date_to_index[init_date.julian()]][j] += date_to_value[v.julian()];
+                                if (date_to_value.contains(v.julian())) {
+                                    for (int j = diff; j < _time_unit_num + 1; j++) {
+                                        sum[date_to_index[init_date.julian()]][j] += date_to_value[v.julian()];
+                                    }
                                 }
                             } else {
-                                sum[date_to_index[init_date.julian()]][diff] += date_to_value[v.julian()];
+                                if (date_to_value.contains(v.julian())) {
+                                    sum[date_to_index[init_date.julian()]][diff] += date_to_value[v.julian()];
+                                }
                             }
                         }
                     }
@@ -128,6 +132,9 @@ struct RetentionLostValueState {
     }
 
     void deserialize_values(Slice serialized, phmap::flat_hash_map<int32_t, double>* date_to_value) {
+        if (serialized.size == 0) {
+            return;
+        }
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, serialized.data + offset, sizeof(size_t));
@@ -143,10 +150,6 @@ struct RetentionLostValueState {
             std::memcpy(&value, serialized.data + offset, sizeof(double));
             offset += sizeof(double);
             date_to_value->emplace(date, value);
-            DateValue v;
-            v.set_julian(date);
-            int year, month, day;
-            v.to_date(&year, &month, &day);
         }
     }
 
@@ -404,16 +407,16 @@ public:
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
-        if ((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()) {
+        /*if ((columns[0]->is_nullable() && columns[0]->is_null(row_num)) || columns[0]->only_null()) {
             return;
-        }
+        }*/
         init_state_if_necessary(ctx, state);
         auto init_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[0]));
         auto return_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[1]));
         auto value_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[2]));
-        if (init_column->get(row_num).get_slice().size == 0) {
+        /*if (init_column->get(row_num).get_slice().size == 0) {
             return;
-        }
+        }*/
         this->data(state).update(init_column, return_column, value_column, row_num);
     }
 
