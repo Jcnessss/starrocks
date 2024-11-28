@@ -187,6 +187,7 @@ import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.dump.QueryDumpInfo;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalValuesOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.statistic.AnalyzeJob;
@@ -258,6 +259,12 @@ import static com.starrocks.sql.common.ErrorMsgProxy.PARSER_ERROR_MSG;
 // first: Parse receive byte array to statement struct.
 // second: Do handle function for statement.
 public class StmtExecutor {
+
+    private static final ShowResultSetMetaData DESC_OUTPUT_META_DATA =
+            ShowResultSetMetaData.builder()
+                    .addColumn(new Column("Column Name", ScalarType.createVarchar(256)))
+                    .addColumn(new Column("Type", ScalarType.createVarchar(20)))
+                    .build();
     private static final Logger LOG = LogManager.getLogger(StmtExecutor.class);
     private static final Logger PROFILE_LOG = LogManager.getLogger("profile");
     private static final Gson GSON = new Gson();
@@ -1211,7 +1218,7 @@ public class StmtExecutor {
 
     // Process a select statement.
     private void handleQueryStmt(ExecPlan execPlan) throws Exception {
-        // Every time set no send flag and clean all data in buffer
+        // Every time set eno send flag and clean all data in buffer
         context.getMysqlChannel().reset();
 
         boolean isExplainAnalyze = parsedStmt.isExplain()
@@ -1229,6 +1236,8 @@ public class StmtExecutor {
         }
         boolean executeInFe = !isExplainAnalyze && !isSchedulerExplain && !isOutfileQuery
                 && canExecuteInFe(context, execPlan.getPhysicalPlan());
+        boolean isDescribeOutput = parsedStmt.isExplain()
+                && StatementBase.ExplainLevel.OUTPUT.equals(parsedStmt.getExplainLevel());
 
         if (isExplainAnalyze) {
             context.getSessionVariable().setEnableProfile(true);
@@ -1236,6 +1245,9 @@ public class StmtExecutor {
             context.getSessionVariable().setPipelineProfileLevel(1);
         } else if (isSchedulerExplain) {
             // Do nothing.
+        } else if (isDescribeOutput) {
+            handleDescOutputStmt(execPlan);
+            return;
         } else if (parsedStmt.isExplain()) {
             String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
                     parsedStmt.getExplainLevel());
@@ -2836,6 +2848,30 @@ public class StmtExecutor {
         QueryDetailQueue.addQueryDetail(queryDetail);
     }
 
+    private void handleDescOutputStmt(ExecPlan execPlan) throws IOException {
+        List<ColumnRefOperator> outputColumns = execPlan.getOutputColumns();
+        List<List<String>> resultRows = new ArrayList<>(outputColumns.size());
+        for (int i = 0; i < execPlan.getOutputColumns().size(); i++) {
+            List<String> columnDesc = new ArrayList<>();
+            columnDesc.add(execPlan.getColNames().get(i));
+            columnDesc.add(outputColumns.get(i).getType().toString());
+            resultRows.add(columnDesc);
+        }
+        ShowResultSet resultSet = new ShowResultSet(DESC_OUTPUT_META_DATA, resultRows);
+
+        if (isProxy) {
+            proxyResultSet = resultSet;
+            context.getState().setEof();
+            return;
+        }
+
+        if (context instanceof HttpConnectContext) {
+            httpResultSender.sendShowResult(resultSet);
+            return;
+        }
+
+        sendShowResult(resultSet);
+    }
     private boolean shouldMarkIdleCheck(StatementBase parsedStmt) {
         return !isInternalStmt
                 && !(parsedStmt instanceof ShowStmt)
