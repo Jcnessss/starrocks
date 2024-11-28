@@ -24,6 +24,7 @@
 #include "gutil/gscoped_ptr.h"
 #include "column/map_column.h"
 #include "gutil/map_util.h"
+#include "gutil/strings/split.h"
 
 #include "runtime/mem_pool.h"
 
@@ -848,6 +849,265 @@ StatusOr<ColumnPtr> TaFunctions::is_retention_user_in_date_collect(FunctionConte
     return res.build(ColumnHelper::is_all_const(columns));
 }
 
+const std::map<Slice, TaFunctions::RangeType> TaFunctions::sliceToRangeType = {
+    {"last_days", TaFunctions::RangeType::LAST_DAYS},
+    {"recent_days", TaFunctions::RangeType::RECENT_DAYS},
+    {"this_week", TaFunctions::RangeType::THIS_WEEK},
+    {"this_month", TaFunctions::RangeType::THIS_MONTH},
+    {"time_range", TaFunctions::RangeType::TIME_RANGE}
+};
 
+StatusOr<ColumnPtr> TaFunctions::ta_extend_date(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL({columns[0]});
+
+    auto& timestamps = columns[0];
+    auto& range_type = ColumnViewer<TYPE_VARCHAR> (columns[1]).value(0);
+    auto& range_param = ColumnViewer<TYPE_VARCHAR> (columns[2]).value(0);
+
+    const auto& s = getBelongRange(timestamps, sliceToRangeType.at(range_type), range_param);
+    if (!s.ok()) {
+        return to_status(s.status());
+    }
+
+    const auto& belong_range = s.value();
+
+    const auto& extra_block = [&]() -> Buffer<TimestampValue> {
+       if (columns.size() == 6) {
+           const ColumnPtr& extra_block_column = columns[5];
+           return getExtraBlock(extra_block_column);
+       } else {
+           return {};
+       }
+    }();
+
+    const auto& [range_intersection, extra_timestamp] = [&]() {
+        Buffer<Buffer<size_t>> dummy;
+        if (columns.size() == 3) {
+            return std::make_pair(belong_range, std::move(dummy));
+        } else {
+            const auto& start_timestamp = ColumnViewer<TYPE_DATETIME> ( columns[3]).value(0);
+            const auto& end_timestamp = ColumnViewer<TYPE_DATETIME> ( columns[4]).value(0);
+            const auto& intersection = getRangeIntersection(belong_range, start_timestamp, end_timestamp);
+
+            if (columns.size() == 5) {
+                return std::make_pair(std::move(intersection), std::move(dummy));
+            }
+            const auto& extra = getExtraTimestamps(extra_block, belong_range, start_timestamp, end_timestamp);
+            return std::make_pair(std::move(intersection), extra);
+        }
+    }();
+
+    size_t chunk_size = timestamps->size();
+
+    UInt32Column::Ptr array_offsets = UInt32Column::create();
+    array_offsets->reserve(chunk_size + 1);
+    array_offsets->append(0);
+
+    ColumnBuilder<TYPE_DATETIME> builder(chunk_size);
+
+    const auto& data_range = [&]() {
+        if (columns.size() == 3) {
+            return belong_range;
+        } else {
+            return range_intersection;
+        }
+    }();
+
+    size_t offset = 0;
+    for (size_t row = 0; row < chunk_size; ++row) {
+        const auto& range = data_range[row];
+        bool has_valid_range = range.first.has_value() && range.second.has_value();
+
+        // 如果本行 range 是 null
+        if (!has_valid_range) {
+            // 如果本行 extra_timestamp 为空，结果为 null 或 []
+            if (extra_timestamp.empty() || extra_timestamp[row].empty()) {
+                array_offsets->append(offset);
+                continue;
+            }
+
+            // 追加 extra_timestamp
+            for (const auto& index : extra_timestamp[row]) {
+                const auto& t = extra_block[index];
+                int64_t unix_time = t.to_unix_microsecond();
+                int64_t second = unix_time / 1000000;
+                int64_t micro = unix_time % 1000000;
+                TimestampValue to_add;
+                to_add.from_unixtime(second, micro, cctz::utc_time_zone());
+                builder.append(std::move(to_add));
+            }
+            offset += extra_timestamp[row].size();
+            array_offsets->append(offset);
+            continue;
+        }
+
+        // 本行 range 有效，处理日期范围
+        const TimestampValue& lower = range.first.value();
+        const TimestampValue& upper = range.second.value();
+
+        // 计算范围内的天数
+        size_t days_in_range = ((DateValue)upper).julian() - ((DateValue)lower).julian() + 1;
+
+        // 追加范围内的日期
+        for (size_t idx = 0; idx < days_in_range; ++idx) {
+            const auto& new_date = lower.add<DAY>(idx);
+            int64_t unix_time = new_date.to_unix_second();
+            TimestampValue new_timestamp;
+            new_timestamp.from_unixtime(unix_time,0,cctz::utc_time_zone());
+            builder.append(std::move(new_timestamp));
+        }
+        offset += days_in_range;
+
+        // 追加 extra_timestamp 的元素到 builder
+        if (!extra_timestamp.empty() && !extra_timestamp[row].empty()) {
+            for (const auto& index : extra_timestamp[row]) {
+                const auto& t = extra_block[index];
+                int64_t unix_time = t.to_unix_microsecond();
+                int64_t second = unix_time / 1000000;
+                int64_t micro = unix_time % 1000000;
+                TimestampValue to_add;
+                to_add.from_unixtime(second, micro, cctz::utc_time_zone());
+                builder.append(std::move(to_add));
+            }
+            offset += extra_timestamp[row].size();
+        }
+
+        array_offsets->append(offset);
+    }
+    if (timestamps->has_null()) {
+        return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets),
+                                      NullColumn::create(*ColumnHelper::as_raw_column<NullableColumn>(timestamps)->null_column()));
+    } else {
+        return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
+    }
+}
+
+StatusOr<Buffer<TaFunctions::TimestampPair>> TaFunctions::getBelongRange(const ColumnPtr& timestamps,
+                                                                                const RangeType& rangeType,
+                                                                                const Slice& rangeParam) {
+    Buffer<TaFunctions::TimestampPair> range;
+    size_t number = 0;
+    if (timestamps->is_constant()) {
+        number = 1;
+    } else {
+        number = timestamps->size();
+    }
+    const auto& timestamp_viewer = ColumnViewer<TYPE_DATETIME>(timestamps);
+    for (size_t row = 0; row < number; row++) {
+        if (timestamp_viewer.is_null(row)) {
+            range.emplace_back();
+        } else {
+            const DateValue event_date = static_cast<DateValue>(timestamp_viewer.value(row));
+            switch (rangeType) {
+                case THIS_MONTH : {
+                    DateValue start_date = event_date;
+                    start_date.trunc_to_month();
+
+                    DateValue end_date = event_date;
+                    end_date.set_end_of_month();
+                    range.emplace_back(std::move(start_date), std::move(end_date));
+                } break;
+                case THIS_WEEK: {
+                    const int first_day_of_week = std::stoi(std::string(rangeParam.data, rangeParam.size));
+                    if (first_day_of_week < 1 || first_day_of_week > 7) {
+                        return Status::InvalidArgument("firstDayOfWeek should be in [1, 7]");
+                    }
+                    DateValue week_start_date = event_date;
+                    week_start_date.trunc_to_week();
+                    if (first_day_of_week == 1) {
+                        range.emplace_back(std::move(week_start_date), week_start_date.add<DAY>(6));
+                    } else {
+                        DateValue fix_week_start_date = week_start_date.add<DAY>(first_day_of_week - 1);
+                        if (fix_week_start_date > event_date) {
+                            fix_week_start_date._julian -= 7;
+                        }
+                        range.emplace_back(std::move(fix_week_start_date), fix_week_start_date.add<DAY>(6));
+                    }
+                } break;
+                case LAST_DAYS:
+                case RECENT_DAYS:
+                case TIME_RANGE: {
+                    std::vector<std::string> params = strings::Split(StringPiece(rangeParam.data, rangeParam.size), "~");
+                    const int range_lower = std::stoi(params[0]);
+                    const int range_upper = std::stoi(params[1]);
+                    if (range_lower > range_upper) {
+                        return Status::InvalidArgument("The rangeLower must be less than or equal to the rangeUpper");
+                    }
+                    DateValue lower_date = event_date;
+                    lower_date._julian -= range_upper;
+                    DateValue upper_date = event_date;
+                    upper_date._julian -= range_lower;
+                    range.emplace_back(std::move(lower_date), std::move(upper_date));
+                } break;
+                default:
+                    return Status::InvalidArgument(fmt::format("Invalid range type: {}", rangeType));
+            }
+        }
+    }
+    return range;
+}
+
+Buffer<TaFunctions::TimestampPair> TaFunctions::getRangeIntersection(const Buffer<TaFunctions::TimestampPair>& belongRange,
+                                                                            const TimestampValue& startDate, const TimestampValue& endDate) {
+    Buffer<TaFunctions::TimestampPair> range_intersection;
+    for (size_t row = 0; row < belongRange.size(); row++) {
+        const auto& lower = belongRange[row].first;
+        const auto& upper = belongRange[row].second;
+        if (!lower || !upper) {
+            range_intersection.emplace_back();
+        } else if (static_cast<DateValue>(startDate) > static_cast<DateValue>(upper.value())
+        || static_cast<DateValue>(endDate) < static_cast<DateValue>(lower.value())) {
+            range_intersection.emplace_back();
+        } else {
+            DateValue new_lower = static_cast<DateValue>(startDate) > static_cast<DateValue>(lower.value()) ? startDate : lower.value();
+            DateValue new_upper = static_cast<DateValue>(endDate) < static_cast<DateValue>(upper.value()) ? endDate : upper.value();
+            range_intersection.emplace_back(std::move(new_lower), std::move(new_upper));
+        }
+
+    }
+    return range_intersection;
+}
+
+Buffer<TimestampValue> TaFunctions::getExtraBlock(const ColumnPtr& extraBlock) {
+    if (extraBlock->only_null()) {
+        return {};
+    }
+    ArrayColumn* array_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(extraBlock.get()));
+    const auto& viewer = ColumnViewer<TYPE_DATETIME>(array_column->elements_column());
+    std::set<TimestampValue> set;
+    for (size_t i = 0; i < viewer.size(); i++) {
+        const TimestampValue& timestamp = viewer.value(i);
+        set.insert(timestamp);
+    }
+    return {set.begin(), set.end()};
+}
+
+Buffer<Buffer<size_t>> TaFunctions::getExtraTimestamps(
+        const Buffer<TimestampValue>& extraBlock, const Buffer<TaFunctions::TimestampPair>& belongRange,
+        const TimestampValue& startTimestamp, const TimestampValue& endTimestamp) {
+    Buffer<Buffer<size_t>> extra;
+    for (size_t row = 0; row < belongRange.size(); row++) {
+        const auto& lower = belongRange[row].first;
+        const auto& upper = belongRange[row].second;
+
+        if (!lower || !upper) {
+            extra.push_back({});
+        } else {
+            for (size_t index = 0; index < extraBlock.size(); index++) {
+                const auto& timestamp = extraBlock[index];
+                Buffer<size_t> curr_row;
+                if ((DateValue)timestamp < (DateValue)startTimestamp || (DateValue)timestamp > (DateValue)endTimestamp) {
+                    if (lower.has_value() && upper.has_value()
+                        &&(DateValue)lower.value() <= (DateValue)timestamp
+                        && (DateValue)upper.value() >= (DateValue)timestamp) {
+                        curr_row.push_back(index);
+                    }
+                }
+                extra.push_back(curr_row);
+            }
+        }
+    }
+    return extra;
+}
 
 } // namespace starrocks

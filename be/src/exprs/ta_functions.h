@@ -58,7 +58,29 @@ public:
         return millis * 1000;
     }
 
+    enum RangeType {
+        LAST_DAYS,
+        RECENT_DAYS,
+        THIS_WEEK,
+        THIS_MONTH,
+        TIME_RANGE
+    };
+    using OptionalTimestamp = std::optional<TimestampValue>;
+    using TimestampPair = std::pair<OptionalTimestamp, OptionalTimestamp>;
+    using TimestampSet = std::set<TimestampValue>;
+    /**
+     *
+     * @param:
+     * @paramType columns: [TYPE_DATETIME, TYPE_VARCHAR, TYPE_VARCHAR] or
+     *                     [TYPE_DATETIME, TYPE_VARCHAR, TYPE_VARCHAR, TYPE_DATETIME, TYPE_DATETIME] or
+     *                     [TYPE_DATETIME, TYPE_VARCHAR, TYPE_VARCHAR, TYPE_DATETIME, TYPE_DATETIME, ARRAY_DATETIME]
+     * @return ARRAY_DATETIME
+     */
+    DEFINE_VECTORIZED_FN(ta_extend_date);
+
 private:
+    static const std::map<Slice, RangeType> sliceToRangeType;
+
     static void get_distribute_group_str_inner(double minVal, double maxVal, int64_t discreteLimit, int64_t number,double statVal, Slice* slice);
     static void getGroupStr(double statVal, int64_t d, double minVal, double maxVal,Slice* slice);
     static void getNumLengthAndFirstVal(int64_t num,int* length, int* firstVal);
@@ -68,6 +90,12 @@ private:
     static void leftCommaDoubleToString(double value, starrocks::Slice* slice);
     static void rightCommaDoubleToString(const double value, starrocks::Slice* slice);
     static void getSimpleGroupStr(double statVal0, double minVal0, double maxVal0, Slice* pSlice);
+    static Buffer<TimestampPair> getRangeIntersection(const Buffer<TimestampPair>& belongRange,
+        const TimestampValue& startDate, const TimestampValue& endDate);
+    static StatusOr<Buffer<TimestampPair>> getBelongRange(const ColumnPtr& timestamps, const RangeType& rangeType, const Slice& rangeParam);
+    static Buffer<TimestampValue> getExtraBlock(const ColumnPtr& extraBlock);
+    static Buffer<Buffer<size_t>> getExtraTimestamps(const Buffer<TimestampValue>& extraBlock, const Buffer<TimestampPair>& belongRange,
+        const TimestampValue& startTimestamp, const TimestampValue& endTimestamp);
 };
 
 } // namespace starrocks

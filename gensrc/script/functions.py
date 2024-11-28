@@ -1340,5 +1340,11 @@ vectorized_functions = [
     [330001, 'get_distribute_group_str', True, False, 'VARCHAR', ['DOUBLE','DOUBLE','BIGINT','BIGINT','DOUBLE'], 'TaFunctions::get_distribute_group_str'],
     [330003, 'funnel_max_step', True, False, 'BIGINT', ['ARRAY_BIGINT','BIGINT','INT'], 'TaFunctions::funnel_max_step'],
     [330004, 'funnel_max_step_date', True, False, 'MAP_DATETIME_BIGINT', ['ARRAY_BIGINT','BIGINT','INT','DATETIME','DATETIME'], 'TaFunctions::funnel_max_step_date'],
-    [320005, 'funnel_pack_time', True, False, 'BIGINT', ['DATETIME','INT'], 'TaFunctions::funnel_pack_time']
+    [320005, 'funnel_pack_time', True, False, 'BIGINT', ['DATETIME','INT'], 'TaFunctions::funnel_pack_time'],
+
+    [350018, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR'], 'TaFunctions::ta_extend_date'],
+    [350019, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR', 'DATETIME', 'DATETIME'], 'TaFunctions::ta_extend_date'],
+    [350020, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR', 'DATETIME', 'DATETIME', 'ARRAY_DATETIME'], 'TaFunctions::ta_extend_date'],
+    [321001, 'is_retention_user_in_date_collect', True, False, 'BOOLEAN',
+     ['VARBINARY','VARBINARY','DATETIME','INT','VARCHAR','INT'], 'TaFunctions::is_retention_user_in_date_collect']
 ]
