@@ -61,29 +61,29 @@ public:
         }
         init_state_if_necessary(ctx, state);
         const auto& map_column = down_cast<const MapColumn&>(*ColumnHelper::get_data_column(columns[0]));
-        auto key_column = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(map_column.keys_column().get()));
-        auto value_column = down_cast<const Int64Column*>(ColumnHelper::get_data_column(map_column.values_column().get()));
-        auto offset = map_column.offsets().get_data();
-        auto start = offset[row_num];
-        auto end = offset[row_num + 1];
+        auto* key_column = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(map_column.keys_column().get()));
+        auto* value_column = down_cast<const Int64Column*>(ColumnHelper::get_data_column(map_column.values_column().get()));
+        auto& offset = map_column.offsets().get_data();
+        const auto start = offset[row_num];
+        const auto end = offset[row_num + 1];
         this->data(state).update(key_column, value_column, start, end);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
         init_state_if_necessary(ctx, state);
         const auto&  elements = down_cast<const MapColumn&>(*ColumnHelper::get_data_column(column));
-        auto offset = elements.offsets().get_data();
-        auto keys = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(elements.keys_column().get()));
-        auto values = down_cast<Int64Column*>(ColumnHelper::get_data_column(elements.values_column().get()));
-        size_t start = offset[row_num];
-        size_t end = offset[row_num + 1];
+        auto& offset = elements.offsets().get_data();
+        const auto* keys = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(elements.keys_column().get()));
+        const auto* values = down_cast<Int64Column*>(ColumnHelper::get_data_column(elements.values_column().get()));
+        const size_t start = offset[row_num];
+        const size_t end = offset[row_num + 1];
         this->data(state).update(keys, values, start, end);
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        auto dst = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
+        auto* dst = down_cast<MapColumn*>(ColumnHelper::get_data_column(to));
         if (this->data(state)._data.size() == 0 && to->is_nullable()) {
-            auto null_column = down_cast<NullableColumn*>(to)->null_column();
+            const auto& null_column = down_cast<NullableColumn*>(to)->null_column();
             null_column->append(1);
             return;
         }
@@ -92,17 +92,17 @@ public:
             auto null_column = down_cast<NullableColumn*>(to)->null_column();
             null_column->append(0);
         }
-        auto key_column = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(dst->keys_column().get()));
+        auto* key_column = down_cast<TimestampColumn*>(ColumnHelper::get_data_column(dst->keys_column().get()));
         if (dst->keys_column()->is_nullable()) {
-            auto pNullableColumn = down_cast<NullableColumn*>(dst->keys_column().get());
+            const auto* pNullableColumn = down_cast<NullableColumn*>(dst->keys_column().get());
             pNullableColumn->null_column()->append(0);
         }
-        auto value_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->values_column().get()));
+        auto* value_column = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->values_column().get()));
         if (dst->values_column()->is_nullable()) {
-            auto pNullableColumn = down_cast<NullableColumn*>(dst->values_column().get());
+            const auto* pNullableColumn = down_cast<NullableColumn*>(dst->values_column().get());
             pNullableColumn->null_column()->append(0);
         }
-        auto offsets = dst->offsets_column();
+        const auto& offsets = dst->offsets_column();
         size_t element_count = 0;
         std::for_each(this->data(state)._data.begin(), this->data(state)._data.end(), [&](const auto& entry){
             key_column->append(std::move(entry.first));
