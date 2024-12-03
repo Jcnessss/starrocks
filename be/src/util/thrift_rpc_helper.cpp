@@ -104,6 +104,21 @@ Status ThriftRpcHelper::rpc_impl(const std::function<void(ClientConnection<TFile
     return Status::ThriftRpcError(ss.str());
 }
 
+template <>
+Status ThriftRpcHelper::rpc_impl(std::function<void(ClientConnection<TStarrocksExternalServiceClient>&)> callback,
+                                 ClientConnection<TStarrocksExternalServiceClient>& client,
+                                 const TNetworkAddress& address) noexcept {
+    std::stringstream ss;
+    try {
+        callback(client);
+        return Status::OK();
+    } catch (apache::thrift::TException& e) {
+        ss << "External RPC failure, address=" << address << ", reason=" << e.what();
+    }
+
+    return Status::ThriftRpcError(ss.str());
+}
+
 template <typename T>
 Status ThriftRpcHelper::rpc(const std::string& ip, const int32_t port,
                             std::function<void(ClientConnection<T>&)> callback, int timeout_ms) {

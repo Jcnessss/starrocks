@@ -228,7 +228,6 @@ struct RetentionLostQuotaState {
         auto* array_column = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(map_column->values_column().get()));
         auto* element_column = down_cast<DoubleColumn*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
         auto& map_offsets = map_column->offsets().get_data();
-        auto& array_offsets = array_column->offsets().get_data();
         for (const auto& row : res) {
             DateValue v;
             v.set_julian(row[0]);
