@@ -25,6 +25,7 @@
 #include "column/map_column.h"
 #include "gutil/map_util.h"
 #include "gutil/strings/split.h"
+#include "gutil/strings/stringpiece.h"
 
 #include "runtime/mem_pool.h"
 
@@ -1108,6 +1109,44 @@ Buffer<Buffer<size_t>> TaFunctions::getExtraTimestamps(
         }
     }
     return extra;
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_kudu_array(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    const auto& string_column = columns[0];
+
+    size_t chunk_size = string_column->size();
+
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size);
+
+    UInt32Column::Ptr array_offsets = UInt32Column::create();
+    array_offsets->reserve(chunk_size + 1);
+    array_offsets->append(0);
+
+    const auto& strings_viewer = ColumnViewer<TYPE_VARCHAR> (string_column);
+
+    size_t offset = 0;
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (strings_viewer.is_null(row)) {
+            array_offsets->append(offset);
+            continue;
+        }
+
+        const Slice& strings = strings_viewer.value(row);
+        std::vector<StringPiece> curr_row = strings::Split(StringPiece(strings.data, strings.size), kudu_array_delimiter.data());
+        for (const StringPiece& piece : curr_row) {
+            builder.append(Slice(piece.data(), piece.size()));
+            offset++;
+        }
+        array_offsets->append(offset);
+    }
+    if (string_column->has_null()) {
+        return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets),
+                                      NullColumn::create(*ColumnHelper::as_raw_column<NullableColumn>(string_column)->null_column()));
+    } else {
+        return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
+    }
 }
 
 } // namespace starrocks

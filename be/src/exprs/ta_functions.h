@@ -78,8 +78,11 @@ public:
      */
     DEFINE_VECTORIZED_FN(ta_extend_date);
 
+    DEFINE_VECTORIZED_FN(get_kudu_array);
+
 private:
     static const std::map<Slice, RangeType> sliceToRangeType;
+    constexpr static std::string_view kudu_array_delimiter = "\t";
 
     static void get_distribute_group_str_inner(double minVal, double maxVal, int64_t discreteLimit, int64_t number,double statVal, Slice* slice);
     static void getGroupStr(double statVal, int64_t d, double minVal, double maxVal,Slice* slice);
