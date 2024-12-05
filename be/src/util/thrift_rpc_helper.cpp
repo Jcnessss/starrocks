@@ -105,7 +105,7 @@ Status ThriftRpcHelper::rpc_impl(const std::function<void(ClientConnection<TFile
 }
 
 template <>
-Status ThriftRpcHelper::rpc_impl(std::function<void(ClientConnection<TStarrocksExternalServiceClient>&)> callback,
+Status ThriftRpcHelper::rpc_impl(const std::function<void(ClientConnection<TStarrocksExternalServiceClient>&)>& callback,
                                  ClientConnection<TStarrocksExternalServiceClient>& client,
                                  const TNetworkAddress& address) noexcept {
     std::stringstream ss;

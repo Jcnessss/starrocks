@@ -204,8 +204,8 @@ enum ConnectorType {
     FILE = 4,
     LAKE = 5,
     BINLOG = 6,
-    STARROCKS = 7
-    ICEBERG = 7,
+    STARROCKS = 7,
+    ICEBERG = 7
 };
 
 class Connector {

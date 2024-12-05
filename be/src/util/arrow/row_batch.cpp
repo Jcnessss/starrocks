@@ -223,7 +223,8 @@ Status serialize_record_batch(const arrow::RecordBatch& record_batch, std::strin
 }
 
 Status deserialize_record_batch(std::shared_ptr<arrow::RecordBatch>* record_batch, const std::string& serialized_string) {
-    auto input = arrow::io::BufferReader(serialized_string);
+    auto buffer = std::make_shared<arrow::Buffer>(serialized_string);
+    auto input = arrow::io::BufferReader(buffer);
     auto reader_res = arrow::ipc::RecordBatchStreamReader::Open(&input);
     if (!reader_res.ok()) {
         std::stringstream msg;

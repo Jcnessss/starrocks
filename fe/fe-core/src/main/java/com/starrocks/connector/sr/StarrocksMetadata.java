@@ -27,9 +27,9 @@ import com.starrocks.catalog.StructField;
 import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
-import com.starrocks.common.Config;
 import com.starrocks.connector.ConnectorMetadata;
-import com.starrocks.rpc.FrontendServiceProxy;
+import com.starrocks.rpc.ThriftConnectionPool;
+import com.starrocks.rpc.ThriftRPCRequestExecutor;
 import com.starrocks.sql.common.MetaNotFoundException;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -95,9 +95,9 @@ public class StarrocksMetadata implements ConnectorMetadata {
         request.setUser(remoteFeUsername);
         request.setUser_ip("%");
         try {
-            TGetDbsResult response = FrontendServiceProxy.call(addr,
-                    Config.thrift_rpc_timeout_ms,
-                    Config.thrift_rpc_retry_times,
+            TGetDbsResult response = ThriftRPCRequestExecutor.call(
+                    ThriftConnectionPool.frontendPool,
+                    addr,
                     client -> client.getDbNames(request));
             if (response.dbs.isEmpty()) {
                 final String errMsg = "get dbs from remote starrocks cluster failed or no db found.";
@@ -120,9 +120,9 @@ public class StarrocksMetadata implements ConnectorMetadata {
         request.setUser(remoteFeUsername);
         request.setUser_ip("%");
         try {
-            TGetTablesResult response = FrontendServiceProxy.call(addr,
-                    Config.thrift_rpc_timeout_ms,
-                    Config.thrift_rpc_retry_times,
+            TGetTablesResult response = ThriftRPCRequestExecutor.call(
+                    ThriftConnectionPool.frontendPool,
+                    addr,
                     client -> client.getTableNames(request));
             if (response.tables.isEmpty()) {
                 final String errMsg = "get tables from remote starrocks cluster failed or no tables found.";
@@ -160,9 +160,9 @@ public class StarrocksMetadata implements ConnectorMetadata {
                 request.setUser(remoteFeUsername);
                 request.setUser_ip("%");
                 try {
-                    TDescribeTableResult response = FrontendServiceProxy.call(addr,
-                            Config.thrift_rpc_timeout_ms,
-                            Config.thrift_rpc_retry_times,
+                    TDescribeTableResult response = ThriftRPCRequestExecutor.call(
+                            ThriftConnectionPool.frontendPool,
+                            addr,
                             client -> client.describeTable(request));
                     if (response.columns.isEmpty()) {
                         final String errMsg = "describe tables from remote starrocks cluster failed or no tables found.";
@@ -209,9 +209,9 @@ public class StarrocksMetadata implements ConnectorMetadata {
                 metaRequest.setAuth_info(tAuthInfo);
 
                 try {
-                    TGetPartitionsMetaResponse response = FrontendServiceProxy.call(addr,
-                            Config.thrift_rpc_timeout_ms,
-                            Config.thrift_rpc_retry_times,
+                    TGetPartitionsMetaResponse response = ThriftRPCRequestExecutor.call(
+                            ThriftConnectionPool.frontendPool,
+                            addr,
                             client -> client.getPartitionsMeta(metaRequest));
                     Set<String> partitionColumns = new HashSet<>();
                     if (response != null) {
@@ -277,9 +277,9 @@ public class StarrocksMetadata implements ConnectorMetadata {
         request.setAuth_info(tAuthInfo);
         request.setTable_name(table.getName());
         try {
-            TGetTablesInfoResponse response = FrontendServiceProxy.call(addr,
-                    Config.thrift_rpc_timeout_ms,
-                    Config.thrift_rpc_retry_times,
+            TGetTablesInfoResponse response = ThriftRPCRequestExecutor.call(
+                    ThriftConnectionPool.frontendPool,
+                    addr,
                     client -> client.getTablesInfo(request));
             if (response.tables_infos.isEmpty()) {
                 final String errMsg = "getTablesInfo from remote starrocks cluster failed or no table found.";

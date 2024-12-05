@@ -126,7 +126,7 @@ Status JniScanner::_init_jni_table_scanner(JNIEnv* env, RuntimeState* runtime_st
         env->DeleteLocalRef(key);
         env->DeleteLocalRef(value);
     }
-    _jni_env->DeleteLocalRef(hashmap_class);
+    env->DeleteLocalRef(hashmap_class);
 
     int fetch_size = runtime_state->chunk_size();
     _jni_scanner_obj = env->NewObject(_jni_scanner_cls, scanner_constructor, fetch_size, hashmap_object);

@@ -40,7 +40,6 @@
 #include "exprs/agg/hll_union.h"
 #include "exprs/agg/hll_union_count.h"
 #include "exprs/agg/intersect_count.h"
-#include "exprs/agg/mann_whitney.h"
 #include "exprs/agg/map_agg.h"
 #include "exprs/agg/maxmin.h"
 #include "exprs/agg/maxmin_by.h"

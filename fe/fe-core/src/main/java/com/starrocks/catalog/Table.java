@@ -123,8 +123,7 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         @SerializedName("KUDU")
         KUDU,
         @SerializedName("STARROCKS")
-        STARROCKS;
-        KUDU,
+        STARROCKS,
         @SerializedName("METADATA")
         METADATA,
         @SerializedName("HIVE_VIEW")

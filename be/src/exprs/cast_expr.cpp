@@ -1652,15 +1652,7 @@ Expr* VectorizedCastExprFactory::create_primitive_cast(ObjectPool* pool, const T
             field_casts[i]->add_child(cast_input.get());
             pool->add(cast_input.release());
         }
-        std::vector<JsonPath> json_paths;
-        json_paths.reserve(cast_to.field_names.size());
-        for (int j = 0; j < cast_to.field_names.size(); j++) {
-            std::string path_string = "$." + cast_to.field_names[j];
-            auto res = JsonPath::parse(Slice(path_string));
-            RETURN_IF(!res.ok(), nullptr);
-            json_paths.emplace_back(res.value());
-        }
-        return new CastJsonToStruct(node, std::move(field_casts), std::move(json_paths));
+        return new CastJsonToStruct(node, std::move(field_casts));
     }
 
     if (from_type == TYPE_VARCHAR && to_type == TYPE_OBJECT) {

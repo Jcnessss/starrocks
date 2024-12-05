@@ -55,12 +55,12 @@ Status StarrocksScanReader::open() {
     tScanOpenParams.__set_mem_limit(-1);
     tScanOpenParams.__set_query_timeout(3600);
     TScanOpenResult tScanOpenResult;
-    ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
+    RETURN_IF_ERROR(ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
             _remote_be_host, std::stoi(_remote_be_port),
             [&tScanOpenResult, &tScanOpenParams](StarrocksExternalServiceConnection& client) {
                 client->open_scanner(tScanOpenResult, tScanOpenParams);
             },
-            _timeout_ms);
+            _timeout_ms));
     if (tScanOpenResult.status.status_code == TStatusCode::OK) {
         _selected_fields = tScanOpenResult.selected_columns;
         _context_id = tScanOpenResult.context_id;
@@ -73,12 +73,12 @@ Status StarrocksScanReader::get_next() {
     tScanNextBatchParams.__set_context_id(_context_id);
     tScanNextBatchParams.__set_offset(_offset);
     TScanBatchResult tScanBatchResult;
-    ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
+    RETURN_IF_ERROR(ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
             _remote_be_host, std::stoi(_remote_be_port),
             [&tScanBatchResult, &tScanNextBatchParams](StarrocksExternalServiceConnection& client) {
                 client->get_next(tScanBatchResult, tScanNextBatchParams);
             },
-            _timeout_ms);
+            _timeout_ms));
     if (tScanBatchResult.status.status_code != TStatusCode::OK) {
         return Status(tScanBatchResult.status);
     }
@@ -88,7 +88,7 @@ Status StarrocksScanReader::get_next() {
     _batch.reset();
     _rows.reset();
     _rows = std::make_shared<std::string>(tScanBatchResult.rows);
-    deserialize_record_batch(&_batch, *_rows.get());
+    RETURN_IF_ERROR(deserialize_record_batch(&_batch, *_rows.get()));
     _offset += _batch->num_rows();
     return Status::OK();
 }
@@ -97,12 +97,12 @@ Status StarrocksScanReader::close() {
     TScanCloseParams tScanCloseParams;
     tScanCloseParams.__set_context_id(_context_id);
     TScanCloseResult tScanCloseResult;
-    ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
+    RETURN_IF_ERROR(ThriftRpcHelper::rpc<TStarrocksExternalServiceClient>(
             _remote_be_host, std::stoi(_remote_be_port),
             [&tScanCloseResult, &tScanCloseParams](StarrocksExternalServiceConnection& client) {
                 client->close_scanner(tScanCloseResult, tScanCloseParams);
             },
-            _timeout_ms);
+            _timeout_ms));
     return Status(tScanCloseResult.status);
 }
 

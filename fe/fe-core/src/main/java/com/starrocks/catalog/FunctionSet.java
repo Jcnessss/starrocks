@@ -37,6 +37,7 @@ package com.starrocks.catalog;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.analysis.ArithmeticExpr;
@@ -789,7 +790,6 @@ public class FunctionSet {
                     .add(WINDOW_FUNNEL)
                     .add(APPROX_TOP_K)
                     .add(INTERSECT_COUNT)
-                    .add(LC_PERCENTILE_DISC)
                     .add(MAP_AGG)
                     .build();
 
