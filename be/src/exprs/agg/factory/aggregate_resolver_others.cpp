@@ -97,6 +97,8 @@ void AggregateFuncResolver::register_others() {
                                 false, AggregateFactory::MakeRetentionLostValueQuotaAggregateFunction());
     add_general_mapping_notnull("retention_lost_date_sim_stat_formula_quota_array_agg",
                                 false, AggregateFactory::MakeRetentionLostValueFormulaQuotaAggregateFunction());
+    add_general_mapping_notnull("build_user_event_session_agg2",
+                                false, AggregateFactory::MakeUserSessionAggregateFunction());
 }
 
 } // namespace starrocks

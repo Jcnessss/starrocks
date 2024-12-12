@@ -107,6 +107,10 @@ AggregateFunctionPtr AggregateFactory::MakeRetentionLostValueFormulaQuotaAggrega
     return std::make_shared<RetentionLostValueFormulaQuotaAggregateFunction>();
 }
 
+AggregateFunctionPtr AggregateFactory::MakeUserSessionAggregateFunction() {
+    return std::make_shared<UserSessionAggregateFunction>();
+}
+
 AggregateFunctionPtr AggregateFactory::MakeBooleanOrAggregateFunction() {
     return std::make_shared<BooleanOrAggregateFunction>();
 }

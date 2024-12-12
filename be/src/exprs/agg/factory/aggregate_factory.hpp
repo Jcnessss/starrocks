@@ -30,6 +30,7 @@
 #include "exprs/agg/bitmap_union.h"
 #include "exprs/agg/bitmap_union_count.h"
 #include "exprs/agg/bitmap_union_int.h"
+#include "exprs/agg/build_user_event_session_agg2.h"
 #include "exprs/agg/count.h"
 #include "exprs/agg/covariance.h"
 #include "exprs/agg/distinct.h"
@@ -191,6 +192,7 @@ public:
     static AggregateFunctionPtr MakeFunnelFlowArrayDateAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction();
     static AggregateFunctionPtr MakeFunnelPackedTimeAggregateFunction2();
+    static AggregateFunctionPtr MakeUserSessionAggregateFunction();
 
     static AggregateFunctionPtr MakeTaMapUnionGreatest();
 

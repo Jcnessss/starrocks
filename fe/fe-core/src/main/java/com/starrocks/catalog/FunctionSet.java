@@ -269,6 +269,8 @@ public class FunctionSet {
     public static final String RETENTION_LOST_VALUE_QUOTA = "retention_lost_date_sim_stat_quota_array_agg";
     public static final String RETENTION_LOST_VALUE_FORMULA_QUOTA = "retention_lost_date_sim_stat_formula_quota_array_agg";
 
+    public static final String BUILD_USER_EVENT_SESSION = "build_user_event_session_agg2";
+
     public static final String STDDEV = "stddev";
     public static final String STDDEV_POP = "stddev_pop";
     public static final String STDDEV_SAMP = "stddev_samp";
@@ -1221,6 +1223,10 @@ public class FunctionSet {
                         Type.ARRAY_VARCHAR, Type.ARRAY_INT, Type.INT, Type.VARCHAR, Type.VARCHAR),
                 returnType, Type.VARBINARY, false, false, false));
 
+        ArrayType res = new ArrayType(new ArrayType(new ArrayType(Type.VARCHAR)));
+        addBuiltin(AggregateFunction.createBuiltin(BUILD_USER_EVENT_SESSION,
+                Lists.newArrayList(Type.INT, Type.DATETIME, Type.VARCHAR, Type.INT,
+                Type.INT, Type.BIGINT), res, Type.VARBINARY, false, false, false));
 
 
         // Type.DATE must before Type.DATATIME, because DATE could be considered as DATETIME.
