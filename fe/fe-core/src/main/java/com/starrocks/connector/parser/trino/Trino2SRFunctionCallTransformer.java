@@ -90,6 +90,9 @@ public class Trino2SRFunctionCallTransformer {
         registerFunctionTransformer("approx_distinct", 1,
                 "approx_count_distinct", List.of(Expr.class));
 
+        registerFunctionTransformer("approx_distinct", 2,
+                "approx_count_distinct", ImmutableList.of(Expr.class, Expr.class));
+
         // 2. arbitrary
         registerFunctionTransformer("arbitrary", 1,
                 "any_value", List.of(Expr.class));
