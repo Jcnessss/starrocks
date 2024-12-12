@@ -58,6 +58,10 @@ public:
         return millis * 1000;
     }
 
+    static int64_t millsToSecsCeil(int64_t millis) {
+        return (int64_t) std::ceil(millis / 1000.0);
+    }
+
     enum RangeType {
         LAST_DAYS,
         RECENT_DAYS,

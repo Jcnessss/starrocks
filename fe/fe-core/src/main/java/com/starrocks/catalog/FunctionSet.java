@@ -516,6 +516,10 @@ public class FunctionSet {
 
     public static final String BITWISE_OR_AGG = "bitwise_or_agg";
 
+    public static final String BUILD_USER_INTERVAL_AGG = "build_user_interval_agg";
+
+    public static final String BUILD_USER_INTERVAL_AGG_GROUPED = "build_user_interval_agg_grouped";
+
     public static final String QUARTERS_ADD = "quarters_add";
     public static final String QUARTERS_SUB = "quarters_sub";
     public static final String WEEKS_ADD = "weeks_add";
@@ -1598,6 +1602,20 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(TA_MAP_UNION_GREATEST,
                 Lists.newArrayList(Type.MAP_DATETIME_BIGINT),Type.MAP_DATETIME_BIGINT,Type.MAP_DATETIME_BIGINT,
                 false,true,false));
+
+        addBuiltin(AggregateFunction.createBuiltin(BUILD_USER_INTERVAL_AGG,
+                Lists.newArrayList(Type.BIGINT, Type.DATETIME, Type.BIGINT, Type.BIGINT, Type.BIGINT),
+                Type.MAP_DATETIME_BIGINT, Type.VARBINARY, false, false, false));
+
+        List<StructField> fields = Lists.newArrayList();
+        fields.add(new StructField("intervalTime", Type.DATETIME));
+        fields.add(new StructField("interval", Type.BIGINT));
+        fields.add(new StructField("groups", Type.ARRAY_VARCHAR));
+        ArrayType retType = new ArrayType(new StructType(fields, true));
+        addBuiltin(AggregateFunction.createBuiltin(BUILD_USER_INTERVAL_AGG_GROUPED,
+                Lists.newArrayList(Type.BIGINT, Type.DATETIME, Type.BIGINT, Type.ARRAY_VARCHAR, Type.BIGINT, Type.BIGINT, Type.BIGINT),
+                retType, Type.VARBINARY, false, false, false));
+
     }
 
     public List<Function> getBuiltinFunctions() {

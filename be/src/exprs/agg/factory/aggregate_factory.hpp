@@ -198,6 +198,9 @@ public:
 
     static AggregateFunctionPtr MakeBitwishAggregateFunction();
 
+    static AggregateFunctionPtr MakeIntervalAggregateFunction();
+    static AggregateFunctionPtr MakeIntervalGroupAggregateFunction();
+
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();

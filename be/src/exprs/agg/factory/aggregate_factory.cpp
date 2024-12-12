@@ -35,6 +35,8 @@
 #include "exprs/agg/retention_lost_date_sim_stat_formula_quota_array_agg.h"
 #include "exprs/agg/retention_ta.h"
 #include "exprs/agg/ta_funnel.h"
+#include "exprs/agg/interval_agg_ta.h"
+#include "exprs/agg/interval_agg_group_ta.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -145,6 +147,14 @@ AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeFunnelPackedTimeAggregateFunction2() {
     return std::make_shared<FunnelPackedTimeCollectAggregateFunction2>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeIntervalAggregateFunction() {
+    return std::make_shared<IntervalAggFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeIntervalGroupAggregateFunction() {
+    return std::make_shared<IntervalGroupAggFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {

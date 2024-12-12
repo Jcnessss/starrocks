@@ -99,6 +99,10 @@ void AggregateFuncResolver::register_others() {
                                 false, AggregateFactory::MakeRetentionLostValueFormulaQuotaAggregateFunction());
     add_general_mapping_notnull("build_user_event_session_agg2",
                                 false, AggregateFactory::MakeUserSessionAggregateFunction());
+    add_general_mapping_notnull("build_user_interval_agg",
+                                false, AggregateFactory::MakeIntervalAggregateFunction());
+    add_general_mapping_notnull("build_user_interval_agg_grouped",
+                                false, AggregateFactory::MakeIntervalGroupAggregateFunction());
 }
 
 } // namespace starrocks
