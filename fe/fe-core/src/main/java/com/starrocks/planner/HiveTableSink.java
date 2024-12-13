@@ -27,6 +27,7 @@ import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
+import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TCompressionType;
 import com.starrocks.thrift.TDataSink;
@@ -54,11 +55,16 @@ public class HiveTableSink extends DataSink {
     private final String tableIdentifier;
     private final CloudConfiguration cloudConfiguration;
 
-    public HiveTableSink(HiveTable hiveTable, TupleDescriptor desc, boolean isStaticPartitionSink, SessionVariable sessionVariable) {
+    public HiveTableSink(HiveTable hiveTable, TupleDescriptor desc, boolean isStaticPartitionSink,
+                         SessionVariable sessionVariable, InsertStmt insertStmt) {
         this.desc = desc;
         this.stagingDir = HiveWriteUtils.getStagingDir(hiveTable, sessionVariable.getHiveTempStagingDir());
         this.partitionColNames = hiveTable.getPartitionColumnNames();
-        this.dataColNames = hiveTable.getDataColumnNames();
+        if (insertStmt != null && insertStmt.hiveOrcPartialInsert()) {
+            this.dataColNames = insertStmt.getTargetColumnNames();
+        } else {
+            this.dataColNames = hiveTable.getDataColumnNames();
+        }
         this.tableIdentifier = hiveTable.getUUID();
         this.isStaticPartitionSink = isStaticPartitionSink;
         HiveStorageFormat format = hiveTable.getStorageFormat();

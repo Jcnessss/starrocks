@@ -94,7 +94,7 @@ public class HiveTableSinkTest {
         };
 
         TupleDescriptor desc = new TupleDescriptor(new TupleId(0));
-        HiveTableSink sink = new HiveTableSink(builder.build(), desc, true, new SessionVariable());
+        HiveTableSink sink = new HiveTableSink(builder.build(), desc, true, new SessionVariable(), null);
         Assert.assertNull(sink.getExchNodeId());
         Assert.assertNull(sink.getOutputPartition());
         Assert.assertNull(sink.getOutputPartition());
@@ -118,6 +118,6 @@ public class HiveTableSinkTest {
         builder.setStorageFormat(HiveStorageFormat.AVRO);
         ExceptionChecker.expectThrowsWithMsg(StarRocksConnectorException.class,
                 "Writing to hive table in [AVRO] format is not supported",
-                () ->new HiveTableSink(builder.build(), desc, true, new SessionVariable()));
+                () ->new HiveTableSink(builder.build(), desc, true, new SessionVariable(), null));
     }
 }

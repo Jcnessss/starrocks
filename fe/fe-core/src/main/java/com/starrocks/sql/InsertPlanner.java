@@ -195,7 +195,8 @@ public class InsertPlanner {
                 .map(Column::getName)
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());
-        OlapTable targetTable = (OlapTable) insertStmt.getTargetTable();
+        //OlapTable targetTable = (OlapTable) insertStmt.getTargetTable();
+        Table targetTable = insertStmt.getTargetTable();
         for (Column column : targetTable.getFullSchema()) {
             String columnName = column.getName().toLowerCase();
             if (outputColumnNames.contains(columnName) || column.isKey()) {
@@ -252,7 +253,7 @@ public class InsertPlanner {
         List<ColumnRefOperator> outputColumns = new ArrayList<>();
         Table targetTable = insertStmt.getTargetTable();
 
-        if (insertStmt.usePartialUpdate()) {
+        if (insertStmt.usePartialUpdate() || insertStmt.hiveOrcPartialInsert()) {
             inferOutputSchemaForPartialUpdate(insertStmt);
         } else {
             outputBaseSchema = targetTable.getBaseSchema();
@@ -410,7 +411,7 @@ public class InsertPlanner {
                         isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable());
             } else if (targetTable instanceof HiveTable) {
                 dataSink = new HiveTableSink((HiveTable) targetTable, tupleDesc,
-                        isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable());
+                        isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable(), insertStmt);
             } else if (targetTable instanceof TableFunctionTable) {
                 dataSink = new TableFunctionTableSink((TableFunctionTable) targetTable);
             } else if (targetTable.isBlackHoleTable()) {
@@ -612,6 +613,9 @@ public class InsertPlanner {
             } else {
                 int idx = insertStatement.getTargetColumnNames().indexOf(targetColumn.getName().toLowerCase());
                 if (idx == -1) {
+                    if (insertStatement.hiveOrcPartialInsert()) {
+                        continue;
+                    }
                     ScalarOperator scalarOperator;
                     Column.DefaultValueType defaultValueType = targetColumn.getDefaultValueType();
                     if (defaultValueType == Column.DefaultValueType.NULL || targetColumn.isAutoIncrement()) {
@@ -688,7 +692,7 @@ public class InsertPlanner {
                         columnRefFactory.create(scalarOperator, scalarOperator.getType(), scalarOperator.isNullable());
                 outputColumns.add(columnRefOperator);
                 columnRefMap.put(columnRefOperator, scalarOperator);
-            } else if (baseSchema.contains(outputFullSchema.get(columnIdx))) {
+            } else if (baseSchema.contains(outputFullSchema.get(columnIdx)) && !insertStatement.hiveOrcPartialInsert()) {
                 ColumnRefOperator columnRefOperator = outputColumns.get(columnIdx);
                 columnRefMap.put(columnRefOperator, columnRefOperator);
             }

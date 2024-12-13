@@ -32,6 +32,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.connector.hive.HiveStorageFormat;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.CatalogMgr;
@@ -219,6 +220,12 @@ public class InsertAnalyzer {
                     if (targetColumns.size() < olapTable.getBaseSchemaWithoutGeneratedColumn().size()) {
                         insertStmt.setUsePartialUpdate();
                     }
+                }
+            }
+            if (table.isHiveTable() && table.isHiveTable() &&
+                    ((HiveTable) table).getStorageFormat() == HiveStorageFormat.ORC) {
+                if (targetColumns.size() < table.getBaseSchema().size()) {
+                    insertStmt.setHiveOrcPartialInsert();
                 }
             }
         }
