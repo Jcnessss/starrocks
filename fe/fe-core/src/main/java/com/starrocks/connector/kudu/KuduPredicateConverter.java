@@ -16,6 +16,8 @@ package com.starrocks.connector.kudu;
 
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.BinaryType;
+import com.starrocks.catalog.Type;
+import com.starrocks.connector.ColumnTypeConverter;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CastOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -104,7 +106,10 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         if (columnName == null) {
             return Lists.newArrayList();
         }
-        Object literal = getLiteral(operator.getChild(1));
+        ColumnSchema column = schema.getColumn(columnName);
+        Type targetType = ColumnTypeConverter.fromKuduType(column);
+        Optional<ConstantOperator> casted = ((ConstantOperator) (operator.getChild(1))).castTo(targetType);
+        Object literal = getLiteral(casted.isPresent() ? casted.get() : operator.getChild(1));
         if (literal == null) {
             return Lists.newArrayList();
         }
@@ -138,10 +143,15 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         if (columnName == null) {
             return Lists.newArrayList();
         }
+        ColumnSchema column = schema.getColumn(columnName);
+        Type targetType = ColumnTypeConverter.fromKuduType(column);
+
         List<ScalarOperator> valuesOperatorList = operator.getListChildren();
+        List<Optional<ConstantOperator>> casted =
+                valuesOperatorList.stream().map(x ->  ((ConstantOperator) x).castTo(targetType)).collect(Collectors.toList());
         List<Object> literalValues = new ArrayList<>(valuesOperatorList.size());
-        for (ScalarOperator valueOperator : valuesOperatorList) {
-            Object literal = getLiteral(valueOperator);
+        for (int i = 0; i < valuesOperatorList.size(); i++) {
+            Object literal = getLiteral(casted.get(i).isPresent() ? casted.get(i).get() : valuesOperatorList.get(i));
             if (literal == null) {
                 return Lists.newArrayList();
             }
