@@ -1883,7 +1883,10 @@ public class AstToStringBuilder {
                 collect(Collectors.toList());
         createTableSql.append(String.join(",\n", columns))
                 .append("\n)");
-
+        // Comment
+        if (!Strings.isNullOrEmpty(table.getComment())) {
+            createTableSql.append("\nCOMMENT \"").append(table.getComment()).append("\"");
+        }
         // Partition column names
         List<String> partitionNames;
         if (table.getType() != JDBC && !table.isUnPartitioned()) {
@@ -1895,7 +1898,9 @@ public class AstToStringBuilder {
                 partitionNames = ((IcebergTable) table).getPartitionColumnNamesWithTransform();
             }
 
-            createTableSql.append(String.join(", ", partitionNames)).append(")");
+            createTableSql.append(String.join(", ", partitionNames.stream().map(
+                    partitionName -> "`" + partitionName + "`").collect(Collectors.toList()
+            ))).append(")");
         }
 
         // Location
@@ -1909,12 +1914,6 @@ public class AstToStringBuilder {
         } else if (table.isPaimonTable()) {
             location = table.getTableLocation();
         }
-
-        // Comment
-        if (!Strings.isNullOrEmpty(table.getComment())) {
-            createTableSql.append("\nCOMMENT (\"").append(table.getComment()).append("\")");
-        }
-
         if (!Strings.isNullOrEmpty(location)) {
             createTableSql.append("\nPROPERTIES (\"location\" = \"").append(location).append("\");");
         }
