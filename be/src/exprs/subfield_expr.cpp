@@ -16,6 +16,7 @@
 
 #include <cstring>
 
+#include "column/chunk.h"
 #include "column/column_helper.h"
 #include "column/nullable_column.h"
 #include "column/struct_column.h"
@@ -39,6 +40,11 @@ public:
         DCHECK_EQ(1, _children.size());
 
         ASSIGN_OR_RETURN(ColumnPtr col, _children.at(0)->evaluate_checked(context, chunk));
+
+        if (col->is_constant() && col->is_nullable()) {
+            col->resize(chunk->num_rows());
+            return col;
+        }
 
         // handle nullable column
         const size_t num_rows = col->size();
