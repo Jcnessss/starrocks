@@ -24,6 +24,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.ImportColumnsStmt;
 import com.starrocks.sql.ast.PrepareStmt;
 import com.starrocks.sql.ast.StatementBase;
@@ -73,6 +74,15 @@ public class SqlParser {
         }
     }
 
+    private static List<StatementBase> handleTrinoViewException(List<StatementBase> statements, Exception trinoException) {
+        for (StatementBase statement : statements) {
+            if (statement instanceof CreateViewStmt) {
+                throw new ParsingException(String.format("Trino parser parse sql error: [%s]", trinoException));
+            }
+        }
+        return statements;
+    }
+
     private static List<StatementBase> parseWithTrinoDialect(String sql, SessionVariable sessionVariable) {
         List<StatementBase> statements = Lists.newArrayList();
         try {
@@ -103,7 +113,7 @@ public class SqlParser {
             if (sql.toLowerCase().contains("select")) {
                 LOG.warn("Trino parse sql [{}] error, cause by {}", sql, e);
             }
-            return tryParseWithStarRocksDialect(sql, sessionVariable, e);
+            return handleTrinoViewException(tryParseWithStarRocksDialect(sql, sessionVariable, e), e);
         } catch (TrinoParserUnsupportedException e) {
             // We only support Trino partial syntax now, and for Trino parser unsupported statement,
             // try to use StarRocks parser to parse

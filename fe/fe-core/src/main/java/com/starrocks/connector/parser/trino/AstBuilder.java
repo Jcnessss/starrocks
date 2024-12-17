@@ -66,10 +66,13 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.sql.analyzer.RelationId;
+import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.ArrayExpr;
 import com.starrocks.sql.ast.CTERelation;
 import com.starrocks.sql.ast.CreateTableAsSelectStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.CreateViewStmt;
+import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.ExceptRelation;
 import com.starrocks.sql.ast.IntersectRelation;
 import com.starrocks.sql.ast.JoinRelation;
@@ -88,11 +91,14 @@ import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.SubqueryRelation;
 import com.starrocks.sql.ast.TableFunctionRelation;
 import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.sql.ast.TableRenameClause;
 import com.starrocks.sql.ast.UnionRelation;
 import com.starrocks.sql.ast.UnitIdentifier;
 import com.starrocks.sql.ast.ValueList;
 import com.starrocks.sql.ast.ValuesRelation;
+import com.starrocks.sql.parser.NodePosition;
 import com.starrocks.sql.parser.ParsingException;
+import io.trino.sql.SqlFormatter;
 import io.trino.sql.tree.AliasedRelation;
 import io.trino.sql.tree.AllColumns;
 import io.trino.sql.tree.ArithmeticBinaryExpression;
@@ -107,6 +113,7 @@ import io.trino.sql.tree.Cast;
 import io.trino.sql.tree.CoalesceExpression;
 import io.trino.sql.tree.ComparisonExpression;
 import io.trino.sql.tree.CreateTableAsSelect;
+import io.trino.sql.tree.CreateView;
 import io.trino.sql.tree.Cube;
 import io.trino.sql.tree.CurrentCatalog;
 import io.trino.sql.tree.CurrentSchema;
@@ -116,6 +123,7 @@ import io.trino.sql.tree.DataType;
 import io.trino.sql.tree.DateTimeDataType;
 import io.trino.sql.tree.DereferenceExpression;
 import io.trino.sql.tree.DoubleLiteral;
+import io.trino.sql.tree.DropView;
 import io.trino.sql.tree.Except;
 import io.trino.sql.tree.ExistsPredicate;
 import io.trino.sql.tree.Explain;
@@ -159,6 +167,7 @@ import io.trino.sql.tree.NumericParameter;
 import io.trino.sql.tree.Offset;
 import io.trino.sql.tree.Query;
 import io.trino.sql.tree.QuerySpecification;
+import io.trino.sql.tree.RenameView;
 import io.trino.sql.tree.Rollup;
 import io.trino.sql.tree.Row;
 import io.trino.sql.tree.RowDataType;
@@ -1291,6 +1300,43 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
                 createTableStmt,
                 null,
                 (QueryStatement) visit(node.getQuery(), context));
+    }
+
+    @Override
+    protected ParseNode visitCreateView(CreateView node, ParseTreeContext context) {
+        String trinoViewSql = SqlFormatter.formatSql(node.getQuery()); // copy from trino CreateViewTask
+        CreateViewStmt stmt = new CreateViewStmt(
+                false,
+                node.isReplace(),
+                qualifiedNameToTableName(convertQualifiedName(node.getName())),
+                null,
+                node.getComment().isPresent() ? node.getComment().get() : null,
+                (QueryStatement) visit(node.getQuery(), context),
+                NodePosition.ZERO);
+        stmt.setInlineTrinoViewDef(trinoViewSql);
+        return stmt;
+    }
+
+    @Override
+    protected ParseNode visitDropView(DropView node, ParseTreeContext context) {
+        return new DropTableStmt(
+                node.isExists(),
+                qualifiedNameToTableName(convertQualifiedName(node.getName())),
+                true,
+                true,
+                NodePosition.ZERO);
+    }
+
+    @Override
+    protected ParseNode visitRenameView(RenameView node, ParseTreeContext context) {
+        TableName target = qualifiedNameToTableName(convertQualifiedName(node.getTarget()));
+
+        TableRenameClause clause = new TableRenameClause(target.getTbl() /* useless for trino view rename */);
+        clause.setTrinoNewTableName(target);
+
+        return new AlterTableStmt(
+                qualifiedNameToTableName(convertQualifiedName(node.getSource())),
+                ImmutableList.of(clause));
     }
 
     public Type getType(DataType dataType) {

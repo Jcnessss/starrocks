@@ -59,6 +59,7 @@ import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.cache.CacheLoader.asyncReloading;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
+import static com.starrocks.connector.hive.HiveMetastoreApiConverter.toMetastoreApiTable;
 
 public class CachingHiveMetastore extends CachingMetastore implements IHiveMetastore {
     private static final Logger LOG = LogManager.getLogger(CachingHiveMetastore.class);
@@ -710,5 +711,26 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             String catalogName,
             final boolean getAllEvents) throws MetastoreNotificationFetchException {
         return ((HiveMetastore) metastore).getNextEventResponse(lastSyncedEventId, catalogName, getAllEvents);
+    }
+
+    @Override
+    public org.apache.hadoop.hive.metastore.api.Table getMetaStoreTable(String dbName, String tableName) {
+        return metastore.getMetaStoreTable(dbName, tableName);
+    }
+
+    @Override
+    public void alterTable(String dbName, String tableName, Table newTable) {
+        org.apache.hadoop.hive.metastore.api.Table hiveTable = toMetastoreApiTable((HiveTable) newTable);
+        alterTable(dbName, tableName, hiveTable);
+    }
+
+    @Override
+    public void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable) {
+        try {
+            metastore.alterTable(dbName, tableName, newTable);
+        } finally {
+            invalidateTable(dbName, tableName);
+            invalidateTable(newTable.getDbName(), newTable.getTableName());
+        }
     }
 }

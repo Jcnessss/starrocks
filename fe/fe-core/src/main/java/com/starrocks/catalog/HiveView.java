@@ -32,6 +32,12 @@ public class HiveView extends ConnectorView {
         Hive
     }
 
+
+    public static final String TABLE_COMMENT = "comment";
+    public static final String PRESTO_VIEW_COMMENT = "Presto View";
+    public static final String PRESTO_VIEW_FLAG = "presto_view";
+    public static final String TRINO_CREATED_BY = "trino_created_by";
+    public static final String PRESTO_VIEW_EXPANDED_TEXT_MARKER = "/* Presto View */";
     public static final String PRESTO_VIEW_PREFIX = "/* Presto View: ";
     public static final String PRESTO_VIEW_SUFFIX = " */";
     private final HiveView.Type viewType;
@@ -77,5 +83,9 @@ public class HiveView extends ConnectorView {
                 tableRelation.getName().setDb(dbName);
             }
         }
+    }
+
+    public HiveView.Type getViewType() {
+        return viewType;
     }
 }

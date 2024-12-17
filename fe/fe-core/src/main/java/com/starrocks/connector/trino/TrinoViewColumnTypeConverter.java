@@ -47,6 +47,88 @@ public class TrinoViewColumnTypeConverter {
 
     private static final List<String> UNSUPPORTED_TYPES = Arrays.asList("UNIONTYPE");
 
+    public static String toTrinoType(Type type) {
+        String trinoType = "";
+        if (type.isScalarType()) {
+            PrimitiveType primitiveType = type.getPrimitiveType();
+            switch (primitiveType) {
+                case BOOLEAN:
+                    return  "BOOLEAN";
+                case TINYINT:
+                    return "TINYINT";
+                case SMALLINT:
+                    return "SMALLINT";
+                case INT:
+                    return "INTEGER";
+                case BIGINT:
+                    return "BIGINT";
+                case FLOAT:
+                    return "REAL";
+                case DOUBLE:
+                    return "DOUBLE";
+                case DATETIME:
+                    return "TIMESTAMP";
+                case DATE:
+                    return "DATE";
+                case VARCHAR: {
+                    int len = ((ScalarType) type).getLength();
+                    if (len == ScalarType.CATALOG_MAX_VARCHAR_LENGTH) {
+                        trinoType = "VARCHAR";
+                    } else {
+                        trinoType = "VARCHAR" + "(" + len + ")";
+                    }
+                    return trinoType;
+                }
+                case CHAR: {
+                    int len = ((ScalarType) type).getLength();
+                    return "CHAR" + "(" + len + ")";
+                }
+                case VARBINARY:
+                    return "VARBINARY";
+                case DECIMALV2:
+                case DECIMAL64:
+                case DECIMAL128: {
+                    int precision = ((ScalarType) type).getScalarPrecision();
+                    int scale = ((ScalarType) type).getScalarScale();
+                    if (scale == 0) {
+                        return "DECIMAL" + "(" + precision + ")";
+                    } else {
+                        return "DECIMAL" + "(" + precision + "," + scale + ")";
+                    }
+                }
+            }
+        }
+        if (type.isMapType()) {
+            MapType mapType = (MapType) type;
+            Type keyType = mapType.getKeyType();
+            Type valueType = mapType.getValueType();
+            return "map(" + toTrinoType(keyType) + "," + toTrinoType(valueType) + ")";
+        }
+        if (type.isArrayType()) {
+            ArrayType arrayType = (ArrayType) type;
+            Type itemType = arrayType.getItemType();
+            return "array(" + toTrinoType(itemType) + ")";
+        }
+        if (type.isStructType()) {
+            StructType structType = (StructType) type;
+            trinoType += "row(";
+            for (int i = 0; i < structType.getFields().size() - 1; i++) {
+                trinoType += "\"";
+                trinoType += structType.getField(i).getName();
+                trinoType += "\" ";
+                trinoType += toTrinoType(structType.getField(i).getType());
+                trinoType += ",";
+            }
+            trinoType += "\"";
+            trinoType += structType.getField(structType.getFields().size() - 1).getName();
+            trinoType += "\" ";
+            trinoType += toTrinoType(structType.getField(structType.getFields().size() - 1).getType());
+            trinoType += ")";
+            return trinoType;
+        }
+        return "UNKNOWN";
+    }
+
     public static Type fromTrinoType(String trinoType) {
         String typeUpperCase = getTypeKeyword(trinoType).toUpperCase();
         PrimitiveType primitiveType;

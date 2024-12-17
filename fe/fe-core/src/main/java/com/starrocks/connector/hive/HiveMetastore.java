@@ -352,4 +352,20 @@ public class HiveMetastore implements IHiveMetastore {
                     "Last synced event id is " + lastSyncedEventId, e);
         }
     }
+
+    @Override
+    public org.apache.hadoop.hive.metastore.api.Table getMetaStoreTable(String dbName, String tableName) {
+        return client.getTable(dbName, tableName);
+    }
+
+    @Override
+    public void alterTable(String dbName, String tableName, Table newTable) {
+        org.apache.hadoop.hive.metastore.api.Table hiveTable = toMetastoreApiTable((HiveTable) newTable);
+        alterTable(dbName, tableName, hiveTable);
+    }
+
+    @Override
+    public void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable) {
+        client.alterTable(dbName, tableName, newTable);
+    }
 }

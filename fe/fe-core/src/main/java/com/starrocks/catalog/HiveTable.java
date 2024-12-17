@@ -103,6 +103,8 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
     private static final String JSON_KEY_PART_COLUMN_NAMES = "partColumnNames";
     private static final String JSON_KEY_DATA_COLUMN_NAMES = "dataColumnNames";
     private static final String JSON_KEY_HIVE_PROPERTIES = "hiveProperties";
+    private static final String JSON_KEY_VIEW_ORIGIN_TEXT = "viewOriginText";
+    private static final String JSON_KEY_VIEW_EXPANDED_TEXT = "viewExpandedText";
 
     public static final String HIVE_METASTORE_URIS = "hive.metastore.uris";
 
@@ -133,6 +135,10 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
     private Map<String, String> hiveProperties = Maps.newHashMap();
     @SerializedName(value = "sp")
     private Map<String, String> serdeProperties = Maps.newHashMap();
+    @SerializedName(value = "vot")
+    private String viewOriginalText;
+    @SerializedName(value = "vet")
+    private String viewExpandedText;
 
     // For `insert into target_table select from hive_table, we set it to false when executing this kind of insert query.
     // 1. `useMetadataCache` is false means that this query need to list all selected partitions files from hdfs/s3.
@@ -153,6 +159,16 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
                      String hiveDbName, String hiveTableName, String tableLocation, String comment, long createTime,
                      List<String> partColumnNames, List<String> dataColumnNames, Map<String, String> properties,
                      Map<String, String> serdeProperties, HiveStorageFormat storageFormat, HiveTableType hiveTableType) {
+        this(id, name, fullSchema, resourceName, catalog, hiveDbName, hiveTableName, tableLocation, comment, createTime,
+                partColumnNames, dataColumnNames, properties, serdeProperties, storageFormat, hiveTableType,
+                null, null);
+    }
+
+    public HiveTable(long id, String name, List<Column> fullSchema, String resourceName, String catalog,
+                     String hiveDbName, String hiveTableName, String tableLocation, String comment, long createTime,
+                     List<String> partColumnNames, List<String> dataColumnNames, Map<String, String> properties,
+                     Map<String, String> serdeProperties, HiveStorageFormat storageFormat, HiveTableType hiveTableType,
+                     String viewOriginalText, String viewExpandedText) {
         super(id, name, TableType.HIVE, fullSchema);
         this.resourceName = resourceName;
         this.catalogName = catalog;
@@ -167,6 +183,8 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         this.serdeProperties = serdeProperties;
         this.storageFormat = storageFormat;
         this.hiveTableType = hiveTableType;
+        this.viewOriginalText = viewOriginalText;
+        this.viewExpandedText = viewExpandedText;
     }
 
     public String getHiveDbTable() {
@@ -268,6 +286,14 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
 
     public Map<String, String> getSerdeProperties() {
         return serdeProperties;
+    }
+
+    public String getViewOriginalText() {
+        return viewOriginalText;
+    }
+
+    public String getViewExpandedText() {
+        return viewExpandedText;
     }
 
     public boolean hasBooleanTypePartitionColumn() {
@@ -480,6 +506,8 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         private Map<String, String> serdeProperties = Maps.newHashMap();
         private HiveStorageFormat storageFormat;
         private HiveTableType hiveTableType = HiveTableType.MANAGED_TABLE;
+        private String viewOriginalText;
+        private String viewExpandedText;
 
         public Builder() {
         }
@@ -564,10 +592,20 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
             return this;
         }
 
+        public Builder setViewOriginalText(String viewOriginalText) {
+            this.viewOriginalText = viewOriginalText;
+            return this;
+        }
+
+        public Builder setViewExpandedText(String viewExpandedText) {
+            this.viewExpandedText = viewExpandedText;
+            return this;
+        }
+
         public HiveTable build() {
             return new HiveTable(id, tableName, fullSchema, resourceName, catalogName, hiveDbName, hiveTableName,
                     tableLocation, comment, createTime, partitionColNames, dataColNames, properties, serdeProperties,
-                    storageFormat, hiveTableType);
+                    storageFormat, hiveTableType, viewOriginalText, viewExpandedText);
         }
     }
 }

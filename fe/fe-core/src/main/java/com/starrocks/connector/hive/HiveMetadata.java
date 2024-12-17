@@ -22,6 +22,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.HiveView;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
@@ -49,6 +50,7 @@ import com.starrocks.sql.ast.AlterClause;
 import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.SingleItemListPartitionDesc;
 import com.starrocks.sql.optimizer.OptimizerContext;
@@ -161,6 +163,35 @@ public class HiveMetadata implements ConnectorMetadata {
         hmsOps.createTableLike(stmt);
     }
 
+    private boolean dropIfTrinoView(DropTableStmt stmt) throws DdlException {
+        String dbName = stmt.getDbName();
+        String tableName = stmt.getTableName();
+        Table table = null;
+        try {
+            table = getTable(dbName, tableName);
+        } catch (Exception e) {
+            // ignore not found exception
+        }
+
+        if (table == null && stmt.isSetIfExists()) {
+            LOG.warn("View {}.{} doesn't exist", dbName, tableName);
+            return true;
+        }
+
+        if (stmt.isView() && table.isHiveView() && ((HiveView) table).getViewType().equals(HiveView.Type.Trino)) {
+            SessionVariable sessionVariable = ConnectContext.get() != null ? ConnectContext.get().getSessionVariable()
+                    : new SessionVariable();
+            String sqlDialect = sessionVariable.getSqlDialect();
+            if (!sqlDialect.equals("trino")) {
+                throw new StarRocksConnectorException("Please specify Trino SQL dialect");
+            }
+            hmsOps.dropTable(dbName, tableName);
+            StatisticUtils.dropStatisticsAfterDropTable(table);
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void dropTable(DropTableStmt stmt) throws DdlException {
         String dbName = stmt.getDbName();
@@ -173,6 +204,15 @@ public class HiveMetadata implements ConnectorMetadata {
                         hmsTable.getDbName(), hmsTable.getTableName(), hmsTable.getTableLocation()));
             }
         } else {
+            if (dropIfTrinoView(stmt)) {
+                return;
+            }
+
+            if (!stmt.isForceDrop()) {
+                throw new DdlException(String.format("Table location will be cleared." +
+                        " 'Force' must be set when dropping a hive table." +
+                        " Please execute 'drop table %s.%s.%s force'", stmt.getCatalogName(), dbName, tableName));
+            }
             HiveTable hiveTable = null;
             try {
                 hiveTable = (HiveTable) getTable(dbName, tableName);
@@ -483,5 +523,10 @@ public class HiveMetadata implements ConnectorMetadata {
         HivePartitionWithStats partitionWithStats =
                 new HivePartitionWithStats(partitionString, hivePartition, HivePartitionStats.empty());
         hmsOps.addPartitions(table.getDbName(), table.getTableName(), Lists.newArrayList(partitionWithStats));
+    }
+
+    @Override
+    public void createView(CreateViewStmt stmt) throws DdlException {
+        hmsOps.createView(stmt);
     }
 }

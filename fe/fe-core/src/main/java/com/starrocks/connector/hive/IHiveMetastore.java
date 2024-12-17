@@ -100,4 +100,10 @@ public interface IHiveMetastore extends IMetastore {
     default long getCurrentEventId() {
         return -1;
     }
+
+    org.apache.hadoop.hive.metastore.api.Table getMetaStoreTable(String dbName, String tableName);
+
+    void alterTable(String dbName, String tableName, Table newTable);
+
+    void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable);
 }

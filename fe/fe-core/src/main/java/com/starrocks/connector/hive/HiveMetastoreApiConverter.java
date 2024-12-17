@@ -192,6 +192,10 @@ public class HiveMetastoreApiConverter {
         return new MetastoreTable(table.getDbName(), table.getTableName(), tableLocation, table.getCreateTime());
     }
 
+    private static boolean isTrinoView(HiveTable table) {
+        return table.getHiveTableType().equals(HiveTable.HiveTableType.VIRTUAL_VIEW) && table.getViewOriginalText() != null;
+    }
+
     public static Table toMetastoreApiTable(HiveTable table) {
         Table apiTable = new Table();
         apiTable.setDbName(table.getDbName());
@@ -202,7 +206,15 @@ public class HiveMetastoreApiConverter {
         apiTable.setPartitionKeys(table.getPartitionColumns().stream()
                 .map(HiveMetastoreApiConverter::toMetastoreApiFieldSchema)
                 .collect(Collectors.toList()));
-        apiTable.setSd(makeStorageDescriptorFromHiveTable(table));
+        if (isTrinoView(table)) {
+            apiTable.setTableType(table.getHiveTableType().toString());
+            apiTable.setViewOriginalText(table.getViewOriginalText());
+            apiTable.setViewExpandedText(table.getViewExpandedText());
+            apiTable.setSd(makeTrinoViewSd(table));
+        } else {
+            apiTable.setTableType("MANAGED_TABLE");
+            apiTable.setSd(makeStorageDescriptorFromHiveTable(table));
+        }
         return apiTable;
     }
 
@@ -212,6 +224,24 @@ public class HiveMetastoreApiConverter {
                 .map(FieldSchema::getName)
                 .collect(Collectors.toList());
         return KuduTable.fromMetastoreTable(table, catalogName, fullSchema, partColNames);
+    }
+
+    private static StorageDescriptor makeTrinoViewSd(HiveTable table) {
+        SerDeInfo serdeInfo = new SerDeInfo();
+        serdeInfo.setName(table.getTableName());
+        serdeInfo.setSerializationLib(null);
+        StorageDescriptor sd = new StorageDescriptor();
+        sd.setLocation(null);
+        sd.setInputFormat(null);
+        sd.setOutputFormat(null);
+        sd.setSerdeInfo(serdeInfo);
+        sd.setCols(table.getDataColumnNames().stream()
+                .map(table::getColumn)
+                .map(HiveMetastoreApiConverter::toMetastoreApiFieldSchema)
+                .collect(toImmutableList()));
+        sd.setParameters(ImmutableMap.of());
+
+        return sd;
     }
 
     private static StorageDescriptor makeStorageDescriptorFromHiveTable(HiveTable table) {
@@ -269,6 +299,9 @@ public class HiveMetastoreApiConverter {
         tableProperties.put("starrocks_version", Version.STARROCKS_VERSION + "-" + Version.STARROCKS_COMMIT_HASH);
         if (ConnectContext.get() != null && ConnectContext.get().getQueryId() != null) {
             tableProperties.put(STARROCKS_QUERY_ID, ConnectContext.get().getQueryId().toString());
+        }
+        if (isTrinoView(table)) {
+            table.getProperties().forEach(tableProperties::put);
         }
         if (table.getHiveTableType() == HiveTable.HiveTableType.EXTERNAL_TABLE) {
             tableProperties.put("EXTERNAL", "TRUE");

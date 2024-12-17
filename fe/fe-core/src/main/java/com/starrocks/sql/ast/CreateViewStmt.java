@@ -32,6 +32,7 @@ public class CreateViewStmt extends DdlStmt {
     //Resolved by Analyzer
     protected List<Column> columns;
     private String inlineViewDef;
+    private String inlineTrinoViewDef;
 
     public CreateViewStmt(boolean ifNotExists, boolean replace,
                           TableName tableName, List<ColWithComment> colWithComments,
@@ -97,6 +98,14 @@ public class CreateViewStmt extends DdlStmt {
 
     public void setInlineViewDef(String inlineViewDef) {
         this.inlineViewDef = inlineViewDef;
+    }
+
+    public String getInlineTrinoViewDef() {
+        return inlineTrinoViewDef;
+    }
+
+    public void setInlineTrinoViewDef(String inlineTrinoViewDef) {
+        this.inlineTrinoViewDef = inlineTrinoViewDef;
     }
 
     public <R, C> R accept(AstVisitor<R, C> visitor, C context) {

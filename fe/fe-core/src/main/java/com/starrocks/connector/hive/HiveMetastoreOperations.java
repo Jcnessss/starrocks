@@ -17,11 +17,15 @@ package com.starrocks.connector.hive;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.HiveView;
 import com.starrocks.catalog.PartitionKey;
+import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
@@ -29,9 +33,17 @@ import com.starrocks.connector.ConnectorTableId;
 import com.starrocks.connector.MetastoreType;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.trino.TrinoViewColumnTypeConverter;
+import com.starrocks.connector.trino.TrinoViewDefinition;
+import com.starrocks.persist.gson.GsonUtils;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
+import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.ListPartitionDesc;
+import com.starrocks.sql.ast.TableRenameClause;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -40,6 +52,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -374,5 +387,148 @@ public class HiveMetastoreOperations {
         }
 
         return targetPath;
+    }
+
+    public void createView(CreateViewStmt stmt) throws DdlException {
+        SessionVariable sessionVariable = ConnectContext.get() != null ? ConnectContext.get().getSessionVariable()
+                : new SessionVariable();
+        String sqlDialect = sessionVariable.getSqlDialect();
+        if (!sqlDialect.equals("trino")) {
+            throw new DdlException("Please specify Trino SQL dialect");
+        }
+
+        List<Column> columns = stmt.getColumns();
+        List<TrinoViewDefinition.ViewColumn> viewColumns = new ArrayList<>();
+        for (Column column : columns) {
+            TrinoViewDefinition.ViewColumn viewColumn = new TrinoViewDefinition.ViewColumn(
+                    column.getName(),
+                    TrinoViewColumnTypeConverter.toTrinoType(column.getType()),
+                    column.getComment());
+            viewColumns.add(viewColumn);
+        }
+        TrinoViewDefinition trinoViewDefinition = new TrinoViewDefinition(
+                stmt.getInlineTrinoViewDef(),
+                stmt.getTableName().getCatalog(),
+                stmt.getDbName(),
+                viewColumns,
+                stmt.getComment(),
+                null,
+                true
+        );
+
+        Map<String, String> properties = ImmutableMap.<String, String>builder()
+                .put(HiveView.TABLE_COMMENT, HiveView.PRESTO_VIEW_COMMENT)
+                .put(HiveView.PRESTO_VIEW_FLAG, "true")
+                .put(HiveView.TRINO_CREATED_BY, "Starrocks Hive connector")
+                .buildOrThrow();
+
+        Column dummyColumn = new Column("dummy", ScalarType.createVarcharType());
+
+        String data = Base64.getEncoder().encodeToString(GsonUtils.GSON.toJson(trinoViewDefinition).getBytes());
+
+        HiveTable.Builder builder = HiveTable.builder()
+                .setId(ConnectorTableId.CONNECTOR_ID_GENERATOR.getNextId().asInt())
+                .setTableName(stmt.getTable())
+                .setCatalogName(catalogName)
+                .setResourceName(toResourceName(catalogName, "hive"))
+                .setHiveDbName(stmt.getDbName())
+                .setHiveTableName(stmt.getTable())
+                .setViewOriginalText(HiveView.PRESTO_VIEW_PREFIX + data + HiveView.PRESTO_VIEW_SUFFIX)
+                .setViewExpandedText(HiveView.PRESTO_VIEW_EXPANDED_TEXT_MARKER)
+                .setHiveTableType(HiveTable.HiveTableType.VIRTUAL_VIEW)
+                .setProperties(properties)
+                .setCreateTime(System.currentTimeMillis())
+                .setPartitionColumnNames(ImmutableList.of())
+                .setDataColumnNames(ImmutableList.of("dummy"))
+                .setFullSchema(ImmutableList.of(dummyColumn))
+                .setTableLocation(null)
+                .setStorageFormat(null);
+        Table table = builder.build();
+
+        try {
+            boolean isExists = tableExists(stmt.getDbName(), stmt.getTable());
+            if (!isExists) {
+                metastore.createTable(stmt.getDbName(), table);
+            } else {
+                Table oldTable = getTable(stmt.getDbName(), stmt.getTable());
+                if (!stmt.isReplace()) {
+                    throw new StarRocksConnectorException("Table '%s' already exists", stmt.getTable());
+                }
+                if (oldTable.isHiveView() && ((HiveView) oldTable).getViewType().equals(HiveView.Type.Trino)) {
+                    LOG.info("view {} already exists, need to replace it", stmt.getTable());
+                    metastore.alterTable(stmt.getDbName(), stmt.getTable(), table);
+                    LOG.info("replace view {} successfully",  stmt.getTable());
+                } else {
+                    throw new StarRocksConnectorException("Table '%s' already exists, table type is '%s'",
+                            stmt.getTable(), oldTable.getType().toString());
+                }
+            }
+        } catch (Exception e) {
+            LOG.error(e.getMessage());
+            throw new StarRocksConnectorException("Create view failed", e);
+        }
+    }
+
+    private void checkRenameSource(TableName source) throws DdlException {
+        Table sourceTable = getTable(source.getDb(), source.getTbl());
+        if (sourceTable == null) {
+            throw new DdlException(String.format("View '%s' does not exist", source));
+        }
+        if (!sourceTable.isHiveView()) {
+            throw new DdlException(String.format("View '%s' does not exist, but a table with that name exists. " +
+                            "Did you mean ALTER TABLE %s RENAME TO ...?", source, source));
+        }
+        if (!((HiveView)
+                sourceTable).getViewType().equals(HiveView.Type.Trino)) {
+            throw new DdlException(String.format("Trino View '%s' does not exist, " +
+                    "but a hive view with that name exists", source));
+        }
+    }
+
+    private void checkRenameTarget(TableName target) throws DdlException {
+        boolean exists = tableExists(target.getDb(), target.getTbl());
+        if (exists) {
+            throw new DdlException(String.format("Target view '%s' already exists", target));
+        }
+    }
+
+    private void renameView(AlterTableStmt stmt) throws DdlException {
+        try {
+            TableName source = stmt.getTbl();
+            TableName target = ((TableRenameClause) stmt.getAlterClauseList().get(0)).getTrinoNewTableName();
+            checkRenameSource(source);
+            checkRenameTarget(target);
+
+            org.apache.hadoop.hive.metastore.api.Table renameTable = metastore.getMetaStoreTable(
+                    stmt.getTbl().getDb(), stmt.getTbl().getTbl());
+
+            renameTable.setDbName(target.getDb());
+            renameTable.setTableName(target.getTbl());
+
+            metastore.alterTable(source.getDb(), source.getTbl(), renameTable);
+        } catch (Exception e) {
+            LOG.error(e.getMessage());
+            throw new StarRocksConnectorException("Rename view failed", e);
+        }
+    }
+
+    public void alterTable(AlterTableStmt stmt) throws DdlException {
+        SessionVariable sessionVariable = ConnectContext.get() != null ? ConnectContext.get().getSessionVariable()
+                : new SessionVariable();
+        String sqlDialect = sessionVariable.getSqlDialect();
+        if (!sqlDialect.equals("trino")) {
+            throw new DdlException("Please specify Trino SQL dialect");
+        }
+        if (stmt.getAlterClauseList().size() > 1) {
+            throw new DdlException("Hive catalog only support alter one operation");
+        }
+
+        switch (stmt.getAlterClauseList().get(0).getOpType()) {
+            case RENAME:
+                renameView(stmt);
+                break;
+            default:
+                throw new DdlException("Hive catalog alter view type only support rename");
+        }
     }
 }

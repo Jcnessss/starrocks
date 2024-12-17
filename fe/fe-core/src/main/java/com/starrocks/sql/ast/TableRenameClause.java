@@ -16,10 +16,12 @@
 package com.starrocks.sql.ast;
 
 import com.starrocks.alter.AlterOpType;
+import com.starrocks.analysis.TableName;
 import com.starrocks.sql.parser.NodePosition;
 
 public class TableRenameClause extends AlterTableClause {
     private final String newTableName;
+    private TableName trinoNewTableName;
 
     public TableRenameClause(String newTableNam) {
         this(newTableNam, NodePosition.ZERO);
@@ -32,6 +34,13 @@ public class TableRenameClause extends AlterTableClause {
 
     public String getNewTableName() {
         return newTableName;
+    }
+
+    public TableName getTrinoNewTableName() {
+        return trinoNewTableName;
+    }
+    public void setTrinoNewTableName(TableName trinoNewTableName) {
+        this.trinoNewTableName = trinoNewTableName;
     }
 
     @Override
