@@ -100,6 +100,9 @@ public class TableFunction extends Function {
         TableFunction unnest = new TableFunction(new FunctionName("unnest"), Lists.newArrayList("unnest"),
                 Lists.newArrayList(Type.ANY_ARRAY), Lists.newArrayList(Type.ANY_ELEMENT), true);
         functionSet.addBuiltin(unnest);
+        unnest = new TableFunction(new FunctionName("unnest"), Lists.newArrayList("unnest"),
+                Lists.newArrayList(Type.ANY_MAP), Lists.newArrayList(Type.ANY_ELEMENT), true);
+        functionSet.addBuiltin(unnest);
 
         TableFunction jsonEach = new TableFunction(new FunctionName("json_each"), Lists.newArrayList("key", "value"),
                 Lists.newArrayList(Type.JSON), Lists.newArrayList(Type.VARCHAR, Type.JSON));

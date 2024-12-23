@@ -410,16 +410,22 @@ public class PolymorphicFunctionAnalyzer {
             if (fn.functionName().equals("unnest")) {
                 List<Type> realTableFnRetTypes = new ArrayList<>();
                 for (Type paramType : paramTypes) {
-                    if (!paramType.isArrayType()) {
+                    if (!paramType.isArrayType() && !paramType.isMapType()) {
                         return null;
                     }
-                    Type t = ((ArrayType) paramType).getItemType();
-                    if (t.isStructType()) {
-                        realTableFnRetTypes.addAll(
-                                ((StructType) t).getFields().stream().map(x -> x.getType()).collect(Collectors.toList()));
-                        continue;
+                    if (paramType.isArrayType()) {
+                        Type t = ((ArrayType) paramType).getItemType();
+                        if (t.isStructType()) {
+                            realTableFnRetTypes.addAll(
+                                    ((StructType) t).getFields().stream().map(x -> x.getType()).collect(Collectors.toList()));
+                            continue;
+                        }
+                        realTableFnRetTypes.add(t);
+                    } else {
+                        MapType map = (MapType) paramType;
+                        realTableFnRetTypes.add(map.getKeyType());
+                        realTableFnRetTypes.add(map.getValueType());
                     }
-                    realTableFnRetTypes.add(t);
                 }
                 return new TableFunction(fn.getFunctionName(), ((TableFunction) fn).getDefaultColumnNames(),
                         Arrays.asList(paramTypes), realTableFnRetTypes);
