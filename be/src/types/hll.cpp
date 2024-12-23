@@ -37,6 +37,10 @@
 #ifdef __x86_64__
 #include <immintrin.h>
 #endif
+#if defined(__ARM_NEON) && defined(__aarch64__)
+#include <arm_acle.h>
+#include <arm_neon.h>
+#endif
 
 #include <cmath>
 #include <map>
@@ -573,6 +577,17 @@ void HyperLogLog::_merge_registers(uint8_t* other_registers) {
         _mm256_storeu_si256((__m256i*)dst, _mm256_max_epu8(xa, xb));
         src += 32;
         dst += 32;
+    }
+#elif defined(__ARM_NEON) && defined(__aarch64__)
+    int loop = HLL_REGISTERS_COUNT / 16;
+    uint8_t* dst = _registers.data;
+    const uint8_t* src = other_registers;
+    for (int i = 0; i < loop; i++) {
+        uint8x16_t va = vld1q_u8(dst);
+        uint8x16_t vb = vld1q_u8(src);
+        vst1q_u8(dst, vmaxq_u8(va, vb));
+        src += 16;
+        dst += 16;
     }
 #else
     for (int i = 0; i < HLL_REGISTERS_COUNT; i++) {
