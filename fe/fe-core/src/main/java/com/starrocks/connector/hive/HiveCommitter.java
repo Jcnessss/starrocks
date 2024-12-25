@@ -76,6 +76,7 @@ public class HiveCommitter {
     private final List<Path> clearPathsForFinish = new ArrayList<>();
     private final Set<Path> remoteFilesCacheToRefresh = new LinkedHashSet<>();
     private final AddPartitionsTask addPartitionsTask = new AddPartitionsTask();
+    private final DropPartitionsTask dropPartitionsTask = new DropPartitionsTask();
     private final List<RenameDirectoryTask> renameDirTasksForAbort = new ArrayList<>();
 
     private final List<UpdateStatisticsTask> updateStatisticsTasks = new ArrayList<>();
@@ -139,6 +140,8 @@ public class HiveCommitter {
                     insertExistsPartitions.add(Pair.create(pu, updateStats));
                 } else if (mode == PartitionUpdate.UpdateMode.OVERWRITE) {
                     prepareOverwritePartition(pu, updateStats);
+                } else if (mode == PartitionUpdate.UpdateMode.DROP) {
+                    prepareDropPartition(pu);
                 }
             }
         }
@@ -152,6 +155,7 @@ public class HiveCommitter {
         try (Timer ignored = Tracers.watchScope(EXTERNAL, "HIVE.SINK.do_commit")) {
             waitAsyncFsTasks();
             runAddPartitionsTask();
+            runDropPartitionsTask();
             runUpdateStatsTasks();
         }
     }
@@ -216,6 +220,13 @@ public class HiveCommitter {
         UpdateStatisticsTask updateStatsTask = new UpdateStatisticsTask(table.getDbName(), table.getTableName(),
                 Optional.empty(), updateStats, false);
         updateStatisticsTasks.add(updateStatsTask);
+    }
+
+    private void prepareDropPartition(PartitionUpdate pu) {
+        if (!dropPartitionsTask.init) {
+            dropPartitionsTask.init(table.getDbName(), table.getTableName(), pu.isDeleteData());
+        }
+        dropPartitionsTask.addPartition(toPartitionValues(pu.getName()));
     }
 
     private void prepareAddPartition(PartitionUpdate pu, HivePartitionStats updateStats) {
@@ -313,6 +324,14 @@ public class HiveCommitter {
         if (!addPartitionsTask.isEmpty()) {
             try (Timer ignored = Tracers.watchScope(EXTERNAL, "HIVE.SINK.add_partition_tasks")) {
                 addPartitionsTask.run(hmsOps);
+            }
+        }
+    }
+
+    private void runDropPartitionsTask() {
+        if (!dropPartitionsTask.isEmpty()) {
+            try (Timer ignored = Tracers.watchScope(EXTERNAL, "HIVE.SINK.drop_partition_tasks")) {
+                dropPartitionsTask.run(hmsOps);
             }
         }
     }
@@ -437,6 +456,9 @@ public class HiveCommitter {
     }
 
     private void clearStagingDir() {
+        if (stagingDir == null) {
+            return;
+        }
         if (!isS3Url(stagingDir.toString()) && !fileOps.deleteIfExists(stagingDir, true)) {
             LOG.warn("Failed to clear staging dir {}", stagingDir);
         }
@@ -508,6 +530,44 @@ public class HiveCommitter {
                     .add("path=" + path)
                     .add("deleteEmptyDir=" + deleteEmptyDir)
                     .toString();
+        }
+    }
+
+    public static class DropPartitionsTask {
+        private final List<List<String>> partitionValues = new ArrayList<>();
+        private String dbName;
+        private String tableName;
+        private boolean deleteData;
+        private boolean init = false;
+
+        public void init(String dbName, String tableName, boolean deleteData) {
+            if (init) {
+                return;
+            }
+            this.dbName = dbName;
+            this.tableName = tableName;
+            this.deleteData = deleteData;
+            init = true;
+        }
+
+        public void addPartition(List<String> partitionValue) {
+            partitionValues.add(partitionValue);
+        }
+
+        public boolean isEmpty() {
+            return partitionValues.isEmpty();
+        }
+
+        public void run(HiveMetastoreOperations hmsOps) {
+            for (List<String> partition : partitionValues) {
+                try {
+                    hmsOps.dropPartition(dbName, tableName, partition, deleteData);
+                } catch (Throwable t) {
+                    LOG.error("Failed to drop partition", t);
+                    throw t;
+                }
+            }
+            partitionValues.clear();
         }
     }
 

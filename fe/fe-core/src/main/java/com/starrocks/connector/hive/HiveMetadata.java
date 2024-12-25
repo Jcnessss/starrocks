@@ -52,6 +52,7 @@ import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.DropTableStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.SingleItemListPartitionDesc;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -528,5 +529,20 @@ public class HiveMetadata implements ConnectorMetadata {
     @Override
     public void createView(CreateViewStmt stmt) throws DdlException {
         hmsOps.createView(stmt);
+    }
+
+    @Override
+    public void msckRepairTable(MsckRepairTableStmt stmt) throws DdlException {
+        String db = stmt.getTableName().getDb();
+        String tbl = stmt.getTableName().getTbl();
+        boolean isExist = tableExists(db, tbl);
+        if (!isExist) {
+            throw new DdlException(String.format("Table '%s' not found", stmt.getTableName()));
+        }
+        Table table = getTable(db, tbl);
+        List<PartitionUpdate> partitionUpdate = hmsOps.msckRepairTable(stmt, table);
+        HiveCommitter committer = new HiveCommitter(
+                hmsOps, fileOps, updateExecutor, refreshOthersFeExecutor, (HiveTable) table, null);
+        committer.commit(partitionUpdate);
     }
 }

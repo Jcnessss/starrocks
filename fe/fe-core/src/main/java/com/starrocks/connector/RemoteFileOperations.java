@@ -236,6 +236,13 @@ public class RemoteFileOperations {
     }
 
     public void renameDirectory(Path source, Path target, Runnable runWhenPathNotExist) {
+        // copy from trino
+        if (pathExists(source)) {
+            if (source.equals(target)) {
+                return;
+            }
+        }
+
         if (pathExists(target)) {
             throw new StarRocksConnectorException("Unable to rename from %s to %s. msg: target directory already exists",
                     source, target);

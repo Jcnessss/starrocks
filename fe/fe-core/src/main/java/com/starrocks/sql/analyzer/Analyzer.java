@@ -101,6 +101,7 @@ import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.InstallPluginStmt;
 import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.PauseRoutineLoadStmt;
 import com.starrocks.sql.ast.PrepareStmt;
 import com.starrocks.sql.ast.QueryStatement;
@@ -1081,6 +1082,12 @@ public class Analyzer {
         @Override
         public Void visitTranslateStatement(TranslateStmt statement, ConnectContext context) {
             TranslateAnalyzer.analyze(statement, context);
+            return null;
+        }
+
+        @Override
+        public Void visitMsckRepairTableStatement(MsckRepairTableStmt statement, ConnectContext context) {
+            MsckRepairTableStmtAnalyzer.analyze(statement, context);
             return null;
         }
     }

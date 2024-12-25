@@ -135,6 +135,7 @@ import com.starrocks.sql.ast.InstallPluginStmt;
 import com.starrocks.sql.ast.KillAnalyzeStmt;
 import com.starrocks.sql.ast.KillStmt;
 import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.PauseRoutineLoadStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.RecoverDbStmt;
@@ -2263,6 +2264,21 @@ public class AuthorizerStmtVisitor implements AstVisitor<Void, ConnectContext> {
                     InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME,
                     context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
                     PrivilegeType.REPOSITORY.name(), ObjectType.SYSTEM.name(), null);
+        }
+        return null;
+    }
+    // ---------------------------------------- Msck View stmt ---------------------------------------
+
+
+    @Override
+    public Void visitMsckRepairTableStatement(MsckRepairTableStmt statement, ConnectContext context) {
+        try {
+            Authorizer.checkTableAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                    statement.getTableName(), PrivilegeType.UPDATE);
+        } catch (AccessDeniedException e) {
+            AccessDeniedException.reportAccessDenied(statement.getTableName().getCatalog(),
+                    context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                    PrivilegeType.UPDATE.name(), ObjectType.TABLE.name(), statement.getTableName().getTbl());
         }
         return null;
     }

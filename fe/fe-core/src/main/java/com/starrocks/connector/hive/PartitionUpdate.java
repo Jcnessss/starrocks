@@ -36,6 +36,7 @@ public class PartitionUpdate {
     private final List<String> fileNames;
     private final long rowCount;
     private final long totalSizeInBytes;
+    private boolean deleteData = false;
 
     public PartitionUpdate(String name, Path writePath, Path targetPath,
                            List<String> fileNames, long rowCount, long totalSizeInBytes) {
@@ -84,10 +85,20 @@ public class PartitionUpdate {
         return this;
     }
 
+    public PartitionUpdate setDeleteData(boolean deleteData) {
+        this.deleteData = deleteData;
+        return this;
+    }
+
+    public boolean isDeleteData() {
+        return deleteData;
+    }
+
     public enum UpdateMode {
         NEW,
         APPEND,
         OVERWRITE,
+        DROP
     }
 
     public static PartitionUpdate get(THiveFileInfo fileInfo, String stagingDir, String tableLocation) {

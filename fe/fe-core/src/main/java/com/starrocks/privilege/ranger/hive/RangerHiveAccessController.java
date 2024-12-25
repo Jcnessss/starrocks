@@ -113,11 +113,22 @@ public class RangerHiveAccessController extends RangerAccessController {
     }
 
     @Override
+    public void checkViewAction(UserIdentity currentUser, Set<Long> roleIds, TableName tableName,
+                                PrivilegeType privilegeType) throws AccessDeniedException {
+        hasPermission(RangerHiveResource.builder()
+                        .setDatabase(tableName.getDb())
+                        .setTable(tableName.getTbl())
+                        .build(),
+                currentUser,
+                privilegeType);
+    }
+
+    @Override
     public String convertToAccessType(PrivilegeType privilegeType) {
         HiveAccessType hiveAccessType;
         if (privilegeType == PrivilegeType.SELECT) {
             hiveAccessType = HiveAccessType.SELECT;
-        } else if (privilegeType == PrivilegeType.INSERT) {
+        } else if (privilegeType == PrivilegeType.INSERT || privilegeType == PrivilegeType.DELETE) {
             hiveAccessType = HiveAccessType.UPDATE;
         } else if (privilegeType == PrivilegeType.CREATE_DATABASE
                 || privilegeType == PrivilegeType.CREATE_TABLE
@@ -125,6 +136,8 @@ public class RangerHiveAccessController extends RangerAccessController {
             hiveAccessType = HiveAccessType.CREATE;
         } else if (privilegeType == PrivilegeType.DROP) {
             hiveAccessType = HiveAccessType.DROP;
+        } else if (privilegeType == PrivilegeType.ALTER) {
+            hiveAccessType = HiveAccessType.ALTER;
         } else {
             hiveAccessType = HiveAccessType.NONE;
         }

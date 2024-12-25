@@ -65,6 +65,7 @@ import com.starrocks.sql.ast.CreateTemporaryTableStmt;
 import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.DropTemporaryTableStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -863,5 +864,15 @@ public class MetadataMgr {
                 throw new StarRocksConnectorException(e.getMessage());
             }
         });
+    }
+
+    public void msckRepairTable(MsckRepairTableStmt stmt) throws DdlException {
+        String catalogName = stmt.getTableName().getCatalog();
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        if (connectorMetadata.isPresent()) {
+            connectorMetadata.get().msckRepairTable(stmt);
+        } else {
+            throw new DdlException("Invalid catalog " + catalogName + " , ConnectorMetadata doesn't exist");
+        }
     }
 }

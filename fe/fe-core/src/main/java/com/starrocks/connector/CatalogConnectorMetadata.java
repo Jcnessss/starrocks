@@ -45,6 +45,7 @@ import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.DropMaterializedViewStmt;
 import com.starrocks.sql.ast.DropPartitionClause;
 import com.starrocks.sql.ast.DropTableStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.PartitionRenameClause;
 import com.starrocks.sql.ast.RefreshMaterializedViewStatement;
 import com.starrocks.sql.ast.TableRenameClause;
@@ -334,5 +335,10 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     @Override
     public CloudConfiguration getCloudConfiguration() {
         return normal.getCloudConfiguration();
+    }
+
+    @Override
+    public void msckRepairTable(MsckRepairTableStmt stmt) throws DdlException {
+        normal.msckRepairTable(stmt);
     }
 }

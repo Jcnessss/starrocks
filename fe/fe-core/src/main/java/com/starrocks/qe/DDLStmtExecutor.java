@@ -115,6 +115,7 @@ import com.starrocks.sql.ast.GrantPrivilegeStmt;
 import com.starrocks.sql.ast.GrantRoleStmt;
 import com.starrocks.sql.ast.InstallPluginStmt;
 import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.PauseRoutineLoadStmt;
 import com.starrocks.sql.ast.RecoverDbStmt;
 import com.starrocks.sql.ast.RecoverPartitionStmt;
@@ -1170,6 +1171,14 @@ public class DDLStmtExecutor {
                 WarehouseManager warehouseMgr = context.getGlobalStateMgr().getWarehouseMgr();
                 warehouseMgr.dropWarehouse(stmt);
             });
+            return null;
+        }
+
+        @Override
+        public ShowResultSet visitMsckRepairTableStatement(MsckRepairTableStmt stmt, ConnectContext context) {
+            ErrorReport.wrapWithRuntimeException(() ->
+                    context.getGlobalStateMgr().getMetadataMgr().msckRepairTable(stmt)
+            );
             return null;
         }
     }

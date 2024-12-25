@@ -256,6 +256,12 @@ public interface AstVisitor<R, C> {
         return visitShowStatement(statement, context);
     }
 
+    // ---------------------------------------- Msck Statement --------------------------------------------
+
+    default R visitMsckRepairTableStatement(MsckRepairTableStmt statement, C context) {
+        return visitDDLStatement(statement, context);
+    }
+
     // ---------------------------------------- Materialized View Statement --------------------------------------------
 
     default R visitCreateMaterializedViewStatement(CreateMaterializedViewStatement statement, C context) {

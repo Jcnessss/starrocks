@@ -148,7 +148,7 @@ public class Authorizer {
 
     public static void checkViewAction(UserIdentity currentUser, Set<Long> roleIds, TableName tableName,
                                        PrivilegeType privilegeType) throws AccessDeniedException {
-        getInstance().getAccessControlOrDefault(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME)
+        getInstance().getAccessControlOrDefault(tableName.getCatalog())
                 .checkViewAction(currentUser, roleIds, tableName, privilegeType);
     }
 

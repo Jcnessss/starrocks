@@ -288,6 +288,7 @@ import com.starrocks.sql.ast.ModifyFrontendAddressClause;
 import com.starrocks.sql.ast.ModifyPartitionClause;
 import com.starrocks.sql.ast.ModifyStorageVolumePropertiesClause;
 import com.starrocks.sql.ast.ModifyTablePropertiesClause;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.MultiItemListPartitionDesc;
 import com.starrocks.sql.ast.MultiRangePartitionDesc;
 import com.starrocks.sql.ast.NormalizedTableFunctionRelation;
@@ -7989,5 +7990,28 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
         Collections.sort(res);
         return res;
+    }
+
+    @Override
+    public ParseNode visitMsckRepairTableStatement(StarRocksParser.MsckRepairTableStatementContext ctx) {
+        QualifiedName qualifiedName = getQualifiedName(ctx.qualifiedName());
+        TableName tableName = qualifiedNameToTableName(qualifiedName);
+        NodePosition pos = createPos(ctx);
+        MsckRepairTableStmt.MsckRepairOp op;
+        if (ctx.SYNC() != null) {
+            op = MsckRepairTableStmt.MsckRepairOp.SYNC;
+        } else if (ctx.DROP() != null) {
+            op = MsckRepairTableStmt.MsckRepairOp.DROP;
+        } else {
+            op = MsckRepairTableStmt.MsckRepairOp.ADD;
+        }
+        Map<String, String> properties = new HashMap<>();
+        if (ctx.properties() != null) {
+            List<Property> propertyList = visit(ctx.properties().property(), Property.class);
+            for (Property property : propertyList) {
+                properties.put(property.getKey(), property.getValue());
+            }
+        }
+        return new MsckRepairTableStmt(tableName, op, properties, pos);
     }
 }

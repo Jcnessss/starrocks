@@ -15,10 +15,14 @@
 package com.starrocks.connector.hive;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.common.DdlException;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
@@ -26,10 +30,18 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
+import static com.google.common.base.Verify.verify;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.starrocks.connector.hive.HiveMetastoreOperations.EXTERNAL_LOCATION_PROPERTY;
+import static java.lang.String.join;
+import static java.util.Locale.ENGLISH;
 
 public class HiveWriteUtils {
     private static final Logger LOG = LogManager.getLogger(HiveWriteUtils.class);
@@ -146,6 +158,104 @@ public class HiveWriteUtils {
         }
 
         return false;
+    }
+
+    /**/
+    public static Set<Location> listDirectories(Location directory, Configuration conf) throws IOException {
+        Path path = new Path(directory.toString());
+        try {
+            FileSystem fileSystem = FileSystem.get(path.toUri(), conf);
+            FileStatus[] files = fileSystem.listStatus(path);
+            if (files.length == 0) {
+                return ImmutableSet.of();
+            }
+            if (files[0].getPath().equals(directory)) {
+                throw new IOException("Location is a file, not a directory: " + path);
+            }
+            return Stream.of(files)
+                    .filter(FileStatus::isDirectory)
+                    .map(file -> listedLocation(directory, path, file.getPath()))
+                    .map(file -> file.appendSuffix("/"))
+                    .collect(toImmutableSet());
+        } catch (FileNotFoundException exception) {
+            return ImmutableSet.of();
+        } catch (IOException ioException) {
+            throw new IOException(String.format("List directories for %s failed: %s", path, ioException.getMessage()),
+                    ioException);
+        }
+    }
+
+    private static Location listedLocation(Location listingLocation, Path listingPath, Path listedPath) {
+        String root = listingPath.toUri().getPath();
+        String path = listedPath.toUri().getPath();
+
+        verify(path.startsWith(root), "iterator path [%s] not a child of listing path [%s] " +
+                "for location [%s]", path, root, listingLocation);
+
+        int index = root.endsWith("/") ? root.length() : root.length() + 1;
+        return listingLocation.appendPath(path.substring(index));
+    }
+
+    private static String listedDirectoryName(Location directory, Location location) {
+        String prefix = directory.path();
+        if (!prefix.endsWith("/")) {
+            prefix += "/";
+        }
+        String path = location.path();
+        verify(path.endsWith("/"), "path does not end with slash: %s", location);
+        verify(path.startsWith(prefix), "path [%s] is not a child of directory [%s]", location, directory);
+        return path.substring(prefix.length(), path.length() - 1);
+    }
+
+    public static Set<String> listPartitions(Location directory, List<Column> partitionColumns, Configuration conf)
+            throws IOException {
+        return doListPartitions(directory, partitionColumns, partitionColumns.size(), ImmutableList.of(), conf);
+    }
+
+    private static Set<String> doListPartitions(Location directory, List<Column> partitionColumns, int depth,
+                                                List<String> partitions, Configuration conf) throws IOException {
+        if (depth == 0) {
+            return ImmutableSet.of(join("/", partitions));
+        }
+
+        ImmutableSet.Builder<String> result = ImmutableSet.builder();
+        for (Location location : listDirectories(directory, conf)) {
+            String path = listedDirectoryName(directory, location);
+            Column column = partitionColumns.get(partitionColumns.size() - depth);
+            if (!isValidPartitionPath(path, column, true)) {
+                continue;
+            }
+            List<String> current = ImmutableList.<String>builder().addAll(partitions).add(path).build();
+            result.addAll(doListPartitions(location, partitionColumns, depth - 1, current, conf));
+        }
+        return result.build();
+    }
+
+    private static boolean isValidPartitionPath(String path, Column column, boolean caseSensitive) {
+        if (!caseSensitive) {
+            path = path.toLowerCase(ENGLISH);
+        }
+        return path.startsWith(column.getName() + '=');
+    }
+
+    public static Optional<String> relativeLocation(Location tableLocation, Location partLocation) {
+        String prefix = tableLocation.path();
+        if (!prefix.endsWith("/")) {
+            prefix += "/";
+        }
+        String path = stripTrailingSlash(partLocation.path());
+        if (path.startsWith(prefix)) {
+            return Optional.of(path.substring(prefix.length()));
+        }
+        return Optional.empty();
+    }
+
+    private static String stripTrailingSlash(String path) {
+        String result = path;
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
     }
 
 }

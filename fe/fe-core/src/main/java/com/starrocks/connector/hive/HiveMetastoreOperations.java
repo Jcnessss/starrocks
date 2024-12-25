@@ -18,6 +18,8 @@ package com.starrocks.connector.hive;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
@@ -43,6 +45,8 @@ import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.ListPartitionDesc;
+import com.starrocks.sql.ast.MsckRepairTableStmt;
+import com.starrocks.sql.ast.MsckRepairTableStmt.MsckRepairOp;
 import com.starrocks.sql.ast.TableRenameClause;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -50,13 +54,16 @@ import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -66,7 +73,9 @@ import static com.starrocks.connector.hive.HiveWriteUtils.checkLocationPropertie
 import static com.starrocks.connector.hive.HiveWriteUtils.createDirectory;
 import static com.starrocks.connector.hive.HiveWriteUtils.isDirectory;
 import static com.starrocks.connector.hive.HiveWriteUtils.isEmpty;
+import static com.starrocks.connector.hive.HiveWriteUtils.listPartitions;
 import static com.starrocks.connector.hive.HiveWriteUtils.pathExists;
+import static com.starrocks.connector.hive.HiveWriteUtils.relativeLocation;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.toResourceName;
 
 public class HiveMetastoreOperations {
@@ -355,7 +364,7 @@ public class HiveMetastoreOperations {
         metastore.updatePartitionStatistics(dbName, tableName, partitionName, update);
     }
 
-    public Path getDefaultLocation(String dbName, String tableName) {
+    public Path getDefaultLocation(String dbName, String tableName, boolean checkExists) {
         Database database = getDb(dbName);
 
         if (database == null) {
@@ -381,12 +390,18 @@ public class HiveMetastoreOperations {
         }
 
         Path targetPath = new Path(databasePath, tableName);
-        if (pathExists(targetPath, hadoopConf)) {
-            throw new StarRocksConnectorException("Target directory for table '%s.%s' already exists: %s",
-                    dbName, tableName, targetPath);
+        if (checkExists) {
+            if (pathExists(targetPath, hadoopConf)) {
+                throw new StarRocksConnectorException("Target directory for table '%s.%s' already exists: %s",
+                        dbName, tableName, targetPath);
+            }
         }
 
         return targetPath;
+    }
+
+    public Path getDefaultLocation(String dbName, String tableName) {
+        return getDefaultLocation(dbName, tableName, true);
     }
 
     public void createView(CreateViewStmt stmt) throws DdlException {
@@ -530,5 +545,130 @@ public class HiveMetastoreOperations {
             default:
                 throw new DdlException("Hive catalog alter view type only support rename");
         }
+    }
+
+    public List<PartitionUpdate> msckRepairTable(MsckRepairTableStmt stmt, Table table) throws DdlException {
+        final int BATCH_GET_PARTITIONS_BY_NAMES_MAX_PAGE_SIZE = 1000;
+
+        String db = stmt.getTableName().getDb();
+        String tbl = stmt.getTableName().getTbl();
+        boolean isExist = tableExists(db, tbl);
+        if (!isExist) {
+            throw new DdlException(String.format("Table '%s' not found", stmt.getTableName()));
+        }
+        try {
+            if (table.getPartitionColumns().isEmpty()) {
+                throw new DdlException(String.format("Table is not partitioned: " + stmt.getTableName()));
+            }
+
+            MsckRepairOp op = stmt.getOp();
+            boolean hasAdd = op == MsckRepairOp.ADD || op == MsckRepairOp.SYNC;
+            boolean hasDrop = op == MsckRepairOp.DROP || op == MsckRepairOp.SYNC;
+
+            Path tablePath;
+            Map<String, String> properties = stmt.getProperties();
+            if (!Strings.isNullOrEmpty(properties.get(LOCATION_PROPERTY))) {
+                String location = properties.get(LOCATION_PROPERTY);
+                tablePath = new Path(location);
+                if (!pathExists(tablePath, hadoopConf)) {
+                    throw new DdlException(String.format("Table location '%s' does not exist", tablePath));
+                }
+            } else {
+                tablePath = getDefaultLocation(db, tbl, false);
+            }
+            Location tableLocation = Location.of(tablePath.toString());
+
+            Set<String> partitionsToAdd = new HashSet<>();
+            Set<String> partitionsToDrop = new HashSet<>();
+
+            List<String> partitionsNamesInMetastore = getPartitionKeys(db, tbl);
+            Set<String> abnormalRelativePartitionLocationsInMetastore = new HashSet<>();
+            for (List<String> partitionsNamesBatch :
+                    Lists.partition(partitionsNamesInMetastore, BATCH_GET_PARTITIONS_BY_NAMES_MAX_PAGE_SIZE)) {
+                Map<String, Partition> map = metastore.getPartitionsByNames(db, tbl, partitionsNamesBatch);
+                for (Map.Entry<String, Partition> entry : map.entrySet()) {
+                    Partition partition = entry.getValue();
+                    if (partition == null) {
+                        continue;
+                    }
+                    String partitionName = entry.getKey();
+                    Location partitionLocation = Location.of(partition.getFullPath());
+                    if (hasAdd) {
+                        Optional<String> optionalRelativeLocation = relativeLocation(tableLocation, partitionLocation);
+                        if (optionalRelativeLocation.isPresent()) {
+                            String relativeLocation = optionalRelativeLocation.get();
+                            if (!partitionName.equals(relativeLocation)) {
+                                abnormalRelativePartitionLocationsInMetastore.add(relativeLocation);
+                            }
+                        }
+                    }
+                    // partitions in metastore but not in file system
+                    if (hasDrop) {
+                        Path partitionPath = new Path(partition.getFullPath());
+                        if (!pathExists(partitionPath, hadoopConf)) {
+                            partitionsToDrop.add(partitionName);
+                        }
+                    }
+                }
+            }
+
+            // partitions in file system but not in metastore
+            if (hasAdd) {
+                Set<String> partitionsInMetastore = ImmutableSet.copyOf(partitionsNamesInMetastore);
+                Set<String> partitionsInFileSystem = listPartitions(tableLocation, table.getPartitionColumns(), hadoopConf);
+                for (String relativizePath : partitionsInFileSystem) {
+                    if (!partitionsInMetastore.contains(relativizePath) &&
+                            !abnormalRelativePartitionLocationsInMetastore.contains(relativizePath)) {
+                        partitionsToAdd.add(relativizePath);
+                    }
+                }
+            }
+            return syncPartitions(partitionsToAdd, partitionsToDrop, op, tableLocation);
+        } catch (IOException e) {
+            throw new DdlException(e.getMessage());
+        }
+    }
+
+    private List<PartitionUpdate> syncPartitions(Set<String> partitionsToAdd,
+                                Set<String> partitionsToDrop,
+                                MsckRepairOp op,
+                                Location tableLocation) {
+        List<PartitionUpdate> partitionUpdates = new ArrayList<>();
+        if (op == MsckRepairOp.ADD || op == MsckRepairOp.SYNC) {
+            partitionUpdates.addAll(partitionsToAdd.stream()
+                    .map(partition -> addPartition(partition, tableLocation))
+                    .collect(Collectors.toList()));
+        }
+        if (op == MsckRepairOp.DROP || op == MsckRepairOp.SYNC) {
+            partitionUpdates.addAll(partitionsToDrop.stream()
+                    .map(this::dropPartition)
+                    .collect(Collectors.toList()));
+        }
+        return partitionUpdates;
+    }
+
+    private PartitionUpdate addPartition(String partition, Location tableLocation) {
+        PartitionUpdate pu = new PartitionUpdate(
+                partition,
+                new Path(tableLocation.appendPath(partition).toString()),
+                new Path(tableLocation.appendPath(partition).toString()),
+                null,
+                0,
+                0);
+        pu.setUpdateMode(PartitionUpdate.UpdateMode.NEW);
+        return pu;
+    }
+
+    private PartitionUpdate dropPartition(String partition) {
+        PartitionUpdate pu = new PartitionUpdate(
+                partition,
+                null,
+                null,
+                null,
+                0,
+                0);
+        pu.setUpdateMode(PartitionUpdate.UpdateMode.DROP);
+        pu.setDeleteData(false);
+        return pu;
     }
 }
