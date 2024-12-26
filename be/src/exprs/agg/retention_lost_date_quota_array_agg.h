@@ -413,6 +413,9 @@ public:
             state.init(time_unit_num, time_unit.to_string(), quota_types, days);
             state.update(init_column, return_column, i);
             serialize_state(state, dst_column);
+            if (dst->get()->is_nullable()) {
+                down_cast<NullableColumn*>(dst->get())->null_column()->append(0);
+            }
         }
     }
 

@@ -133,6 +133,9 @@ public:
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
         serialize_state(this->data(state), down_cast<BinaryColumn*>(ColumnHelper::get_data_column(to)));
+        if (to->is_nullable()) {
+            down_cast<NullableColumn*>(to)->null_column()->append(0);
+        }
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {

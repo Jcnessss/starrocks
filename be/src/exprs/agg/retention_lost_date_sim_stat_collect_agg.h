@@ -334,10 +334,14 @@ struct RetentionLostValueState {
         for (int i = 0; i < sum.size(); i++) {
             vpack::Builder builder_array;
             builder_array.openArray();
-            builder_array.add(vpack::Value(0));
+            vpack::Builder inner_array;
+            inner_array.openArray();
+            inner_array.add(vpack::Value(0));
             for (int j = 0; j < sum[i].size(); j++) {
-                builder_array.add(vpack::Value(sum[i][j]));
+                inner_array.add(vpack::Value(sum[i][j]));
             }
+            inner_array.close();
+            builder_array.add(inner_array.slice());
             builder_array.close();
             DateValue v;
             v.set_julian(res[i][0]);
@@ -487,6 +491,9 @@ public:
             state.init(time_unit_num, time_unit.to_string(), compute_type);
             state.update(init_column, return_column, value_column, i);
             serialize_state(state, dst_column);
+            if (dst->get()->is_nullable()) {
+                down_cast<NullableColumn*>(dst->get())->null_column()->append(0);
+            }
         }
     }
 
