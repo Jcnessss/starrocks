@@ -3333,4 +3333,8 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static int max_get_partitions_meta_result_count = 100000;
+
+    // whether to skip list partition file for stats
+    @ConfField(mutable = true)
+    public static boolean enable_part_stats_only_hms = false;
 }

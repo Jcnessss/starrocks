@@ -27,6 +27,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.Config;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.RemoteFileOperations;
@@ -55,6 +56,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Maps.immutableEntry;
 import static com.starrocks.connector.PartitionUtil.toHivePartitionName;
 import static java.lang.Double.NEGATIVE_INFINITY;
+import static java.lang.Double.NaN;
 import static java.lang.Double.POSITIVE_INFINITY;
 import static java.lang.Double.isFinite;
 import static java.lang.Double.isNaN;
@@ -77,6 +79,7 @@ public class HiveStatisticsProvider {
             List<PartitionKey> partitionKeys) {
         Statistics.Builder builder = Statistics.builder();
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
+        boolean enablePartStatsOnlyHms = Config.enable_part_stats_only_hms && !hmsTbl.isUnPartitioned();
         if (hmsTbl.isUnPartitioned()) {
             HivePartitionStats tableStats = hmsOps.getTableStatistics(hmsTbl.getDbName(), hmsTbl.getTableName());
             return createUnpartitionedStats(tableStats, columns, builder, table);
@@ -99,6 +102,9 @@ public class HiveStatisticsProvider {
         avgRowNumPerPartition = getPerPartitionRowAvgNums(partitionStatistics.values());
 
         if (avgRowNumPerPartition <= 0) {
+            if (enablePartStatsOnlyHms) {
+                return builder.setTableRowCountMayInaccurate(true).build();
+            }
             builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys));
             return builder.build();
         }
@@ -176,6 +182,7 @@ public class HiveStatisticsProvider {
             List<ColumnRefOperator> columns,
             List<PartitionKey> partitionKeys,
             double presentRowNums) {
+        boolean enablePartStatsOnlyHms = Config.enable_part_stats_only_hms && table.isPartitioned();
         Statistics.Builder builder = Statistics.builder();
         for (ColumnRefOperator columnRefOperator : columns) {
             builder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());
@@ -183,11 +190,16 @@ public class HiveStatisticsProvider {
 
         double totalRowNums = 0;
         try {
-            totalRowNums = presentRowNums >= 0 ? presentRowNums : getEstimatedRowCount(table, partitionKeys);
+            totalRowNums = presentRowNums >= 0 ? presentRowNums
+                    : enablePartStatsOnlyHms ? NaN : getEstimatedRowCount(table, partitionKeys);
         } catch (Exception e) {
             LOG.warn("Failed to estimate row count on table [{}]", table);
         } finally {
-            builder.setOutputRowCount(totalRowNums);
+            if (enablePartStatsOnlyHms) {
+                builder.setTableRowCountMayInaccurate(true);
+            } else {
+                builder.setOutputRowCount(totalRowNums);
+            }
         }
 
         return builder.build();
