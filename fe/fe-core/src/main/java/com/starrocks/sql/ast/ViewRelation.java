@@ -32,11 +32,6 @@ public class ViewRelation extends Relation {
         this.name = name;
         this.view = view;
         this.queryStatement = queryStatement;
-        // The order by is meaningless in subquery
-        QueryRelation queryRelation = this.queryStatement.getQueryRelation();
-        if (!queryRelation.hasLimit()) {
-            queryRelation.clearOrder();
-        }
     }
 
     public View getView() {

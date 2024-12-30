@@ -98,11 +98,6 @@ public class SubqueryUtils {
     public static LogicalPlan getLogicalPlan(ConnectContext session, CTETransformerContext cteContext,
                                              ColumnRefFactory columnRefFactory, QueryRelation relation,
                                              ExpressionMapping outer) {
-        // For in subQuery, the order by is meaningless
-        if (!relation.hasLimit()) {
-            relation.getOrderBy().clear();
-        }
-
         return new RelationTransformer(columnRefFactory, session, outer, cteContext).transform(relation);
     }
 

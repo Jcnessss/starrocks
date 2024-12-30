@@ -31,11 +31,6 @@ public class SubqueryRelation extends QueryRelation {
     public SubqueryRelation(QueryStatement queryStatement, NodePosition pos) {
         super(pos);
         this.queryStatement = queryStatement;
-        QueryRelation queryRelation = this.queryStatement.getQueryRelation();
-        // The order by is meaningless in subquery
-        if (!queryRelation.hasLimit()) {
-            queryRelation.clearOrder();
-        }
     }
 
     @Override
