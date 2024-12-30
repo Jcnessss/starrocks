@@ -14,6 +14,7 @@
 
 #include "exprs/ta_functions.h"
 
+#include <codecvt>
 #include <iomanip>
 #include <utility>
 
@@ -26,6 +27,7 @@
 #include "gutil/map_util.h"
 #include "gutil/strings/split.h"
 #include "gutil/strings/stringpiece.h"
+#include "util/pinyin.hpp"
 
 #include "runtime/mem_pool.h"
 
@@ -1146,5 +1148,72 @@ StatusOr<ColumnPtr> TaFunctions::get_kudu_array(FunctionContext* context, const 
         return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
     }
 }
+
+StatusOr<ColumnPtr> TaFunctions::ta_convert_to_pinyin(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    const auto& string_column = columns[0];
+
+    size_t chunk_size = string_column->size();
+
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size);
+
+    const auto& strings_viewer = ColumnViewer<TYPE_VARCHAR> (string_column);
+
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (strings_viewer.is_null(row)) {
+            builder.append_null();
+            continue;
+        }
+        const Slice& str = strings_viewer.value(row);
+        if (is_all_ascii(str)) {
+            builder.append(str);
+            continue;
+        }
+        const std::wstring& wstr = utf8_to_wstring(str);
+        std::string curr_row;
+        for (wchar_t wchar : wstr) {
+            const auto& pinyin = WzhePinYin::Pinyin::GetPinyinOne(wchar);
+            if (pinyin.has_value()) {
+                curr_row.append(std::move(pinyin.value()));
+            } else {
+                if (wchar <= 0x7F) { // ASCII 范围内
+                    curr_row.append(1, static_cast<char>(wchar));
+                } else {
+                    curr_row.append(std::move(wchar_to_utf8(wchar)));
+                }
+            }
+        }
+        builder.append(std::move(curr_row));
+    }
+    if (string_column->is_nullable()) {
+        return builder.build_nullable_column();
+    } else {
+        return builder.build(string_column->is_constant());
+    }
+}
+
+
+std::wstring TaFunctions::utf8_to_wstring(const Slice& slice) {
+    thread_local std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.from_bytes(slice.data, slice.data + slice.size);
+}
+std::string TaFunctions::wchar_to_utf8(const wchar_t& wchar) {
+    thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    return converter.to_bytes(std::move(std::wstring(1, wchar)));
+}
+bool TaFunctions::is_all_ascii(const Slice& slice) {
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(slice.data);
+    const uint8_t* end = data + slice.size;
+
+    while (data < end) {
+        if (*data++ >= 0x80) return false;
+    }
+    return true;
+}
+
+
+
+
 
 } // namespace starrocks

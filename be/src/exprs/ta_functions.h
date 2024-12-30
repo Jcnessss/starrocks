@@ -84,6 +84,8 @@ public:
 
     DEFINE_VECTORIZED_FN(get_kudu_array);
 
+    DEFINE_VECTORIZED_FN(ta_convert_to_pinyin);
+
 private:
     static const std::map<Slice, RangeType> sliceToRangeType;
     constexpr static std::string_view kudu_array_delimiter = "\t";
@@ -103,6 +105,9 @@ private:
     static Buffer<TimestampValue> getExtraBlock(const ColumnPtr& extraBlock);
     static Buffer<Buffer<size_t>> getExtraTimestamps(const Buffer<TimestampValue>& extraBlock, const Buffer<TimestampPair>& belongRange,
         const TimestampValue& startTimestamp, const TimestampValue& endTimestamp);
+    static std::wstring utf8_to_wstring(const Slice& slice);
+    static std::string wchar_to_utf8(const wchar_t& wchar);
+    static bool is_all_ascii(const Slice& slice);
 };
 
 } // namespace starrocks

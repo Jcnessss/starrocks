@@ -107,6 +107,7 @@ set(UTIL_FILES
   hash_util.cpp
   internal_service_recoverable_stub.cpp
   exprtk.hpp
+  pinyin.hpp
 )
 
 add_library(Util STATIC
