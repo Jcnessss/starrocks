@@ -1212,8 +1212,110 @@ bool TaFunctions::is_all_ascii(const Slice& slice) {
     return true;
 }
 
+StatusOr<ColumnPtr> TaFunctions::ta_cast_to_varchar(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
 
+    const auto& double_column = columns[0];
 
+    size_t chunk_size = double_column->size();
 
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size);
+
+    const auto& doubles_viewer = ColumnViewer<TYPE_DOUBLE> (double_column);
+
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (doubles_viewer.is_null(row)) {
+            builder.append_null();
+            continue;
+        }
+        double double_v = doubles_viewer.value(row);
+        if (std::isinf(double_v) || std::isnan(double_v)) {
+            builder.append(std::move(fmt::format("{}", double_v)));
+            continue;
+        }
+        const auto& result = fmt::detail::dragonbox::to_decimal(double_v);
+        std::string decimal_representation = format_number(double_v, result.significand, result.exponent, double_v < 0);
+        builder.append(std::move(decimal_representation));
+    }
+    if (double_column->is_nullable()) {
+        return builder.build_nullable_column();
+    } else {
+        return builder.build(double_column->is_constant());
+    }
+}
+
+int TaFunctions::calculate_scale(uint64_t significand, int exponent) {
+    // 获取有效数字的位数
+    int significand_digits = 0;
+    uint64_t sig = significand;
+    while (sig > 0) {
+        significand_digits++;
+        sig /= 10;
+    }
+
+    // 有效数字的小数部分位数总是 significand_digits-1
+    // (假设第一位在小数点前面，如 1.23)
+    int fractional_digits = significand_digits - 1;
+
+    // 指数部分直接使用 decimal.exponent
+    return fractional_digits - exponent;
+}
+
+std::string TaFunctions::format_number(double v, uint64_t significand, int exponent, bool is_negative) {
+    // 处理0的特殊情况
+    if (significand == 0) return "0";
+
+    // 处理超出范围的情况
+    int scale = calculate_scale(significand, exponent);
+    if (scale < -100 || scale >= 100) {
+        return fmt::format("{}", v);
+    }
+
+    // 预计算需要的空间
+    std::string digits = std::to_string(significand);
+    size_t orig_len = digits.length();
+    size_t max_size = orig_len + std::abs(exponent) + 2; // +2 for sign and decimal point
+
+    std::string result;
+    result.reserve(max_size);
+
+    // 添加负号
+    if (is_negative) {
+        result.push_back('-');
+    }
+
+    if (exponent < 0) {
+        int abs_exp = -exponent;
+        if (abs_exp < orig_len) {
+            // 在中间插入小数点
+            result.append(digits, 0, orig_len - abs_exp);
+            result.push_back('.');
+            result.append(digits, orig_len - abs_exp, abs_exp);
+        } else {
+            // 需要在前面补零
+            result.append("0.");
+            result.append(abs_exp - orig_len, '0');
+            result.append(digits);
+        }
+    } else if (exponent > 0) {
+        result.append(digits);
+        result.append(exponent, '0');
+    } else {
+        result.append(digits);
+    }
+
+    // 移除末尾的零和不必要的小数点
+    if (size_t dot_pos = result.find('.'); dot_pos != std::string::npos) {
+        if (size_t last_nonzero = result.find_last_not_of('0'); last_nonzero != std::string::npos) {
+            if (last_nonzero == dot_pos) {
+                result.resize(dot_pos);
+            } else {
+                result.resize(last_nonzero + 1);
+            }
+        }
+    }
+
+    return result;
+}
 
 } // namespace starrocks

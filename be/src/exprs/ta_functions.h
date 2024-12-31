@@ -86,6 +86,8 @@ public:
 
     DEFINE_VECTORIZED_FN(ta_convert_to_pinyin);
 
+    DEFINE_VECTORIZED_FN(ta_cast_to_varchar);
+
 private:
     static const std::map<Slice, RangeType> sliceToRangeType;
     constexpr static std::string_view kudu_array_delimiter = "\t";
@@ -108,6 +110,8 @@ private:
     static std::wstring utf8_to_wstring(const Slice& slice);
     static std::string wchar_to_utf8(const wchar_t& wchar);
     static bool is_all_ascii(const Slice& slice);
+    static int calculate_scale(uint64_t significand, int exponent);
+    static std::string format_number(double v, uint64_t significand, int exponent, bool is_negative);
 };
 
 } // namespace starrocks

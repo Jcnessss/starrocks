@@ -1342,6 +1342,7 @@ vectorized_functions = [
     [330004, 'funnel_max_step_date', True, False, 'MAP_DATETIME_BIGINT', ['ARRAY_BIGINT','BIGINT','INT','DATETIME','DATETIME'], 'TaFunctions::funnel_max_step_date'],
     [320005, 'funnel_pack_time', True, False, 'BIGINT', ['DATETIME','INT'], 'TaFunctions::funnel_pack_time'],
 
+    [350004, 'ta_cast_to_varchar', True, False, 'VARCHAR', ['DOUBLE'], 'TaFunctions::ta_cast_to_varchar'],
     [350005, 'ta_convert_to_pinyin', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::ta_convert_to_pinyin'],
     [350006, 'get_kudu_array', True, False, 'ARRAY_VARCHAR', ['VARCHAR'], 'TaFunctions::get_kudu_array'],
 
