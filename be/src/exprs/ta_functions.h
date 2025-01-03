@@ -16,6 +16,7 @@
 
 #include "column/column_viewer.h"
 #include "exprs/function_helper.h"
+#include "exprs/ip_location/ip_location_manager.h"
 
 namespace starrocks {
 class TaFunctions {
@@ -88,6 +89,17 @@ public:
 
     DEFINE_VECTORIZED_FN(ta_cast_to_varchar);
 
+    /**
+     *
+     * @param:
+     * @paramType columns: [TYPE_VARCHAR] or
+     *                     [TYPE_VARCHAR, TYPE_VARCHAR] or
+     *                     [TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN] or
+     *                     [TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_BOOLEAN]
+     * @return ARRAY_VARCHAR
+     */
+    DEFINE_VECTORIZED_FN(get_ip_location);
+
 private:
     static const std::map<Slice, RangeType> sliceToRangeType;
     constexpr static std::string_view kudu_array_delimiter = "\t";
@@ -112,6 +124,7 @@ private:
     static bool is_all_ascii(const Slice& slice);
     static int calculate_scale(uint64_t significand, int exponent);
     static std::string format_number(double v, uint64_t significand, int exponent, bool is_negative);
+    static std::unique_ptr<IpLocationManager> ip_location_manager;
 };
 
 } // namespace starrocks

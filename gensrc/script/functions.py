@@ -1345,6 +1345,10 @@ vectorized_functions = [
     [350004, 'ta_cast_to_varchar', True, False, 'VARCHAR', ['DOUBLE'], 'TaFunctions::ta_cast_to_varchar'],
     [350005, 'ta_convert_to_pinyin', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::ta_convert_to_pinyin'],
     [350006, 'get_kudu_array', True, False, 'ARRAY_VARCHAR', ['VARCHAR'], 'TaFunctions::get_kudu_array'],
+    [350007, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR'], 'TaFunctions::get_ip_location'],
+    [350008, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'TaFunctions::get_ip_location'],
+    [350009, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'BOOLEAN'], 'TaFunctions::get_ip_location'],
+    [350010, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'BOOLEAN', 'BOOLEAN'], 'TaFunctions::get_ip_location'],
 
     [350018, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR'], 'TaFunctions::ta_extend_date'],
     [350019, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR', 'DATETIME', 'DATETIME'], 'TaFunctions::ta_extend_date'],

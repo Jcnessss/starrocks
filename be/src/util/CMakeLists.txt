@@ -108,6 +108,7 @@ set(UTIL_FILES
   internal_service_recoverable_stub.cpp
   exprtk.hpp
   pinyin.hpp
+  sync_remote_file_util.cpp
 )
 
 add_library(Util STATIC

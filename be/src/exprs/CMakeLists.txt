@@ -103,7 +103,12 @@ set(EXPR_FILES
   dictionary_get_expr.cpp
   ngram.cpp
   match_expr.cpp
-        ta_functions.cpp
+  ip_location/base_location_service.cpp
+  ip_location/ipdb.cpp
+  ip_location/ip360_cn_location_service.cpp
+  ip_location/ip360_en_location_service.cpp
+  ip_location/ip_location_manager.cpp
+  ta_functions.cpp
 )
 
 add_library(Exprs ${EXPR_FILES})

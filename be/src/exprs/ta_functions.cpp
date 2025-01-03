@@ -1318,4 +1318,141 @@ std::string TaFunctions::format_number(double v, uint64_t significand, int expon
     return result;
 }
 
+std::unique_ptr<IpLocationManager> TaFunctions::ip_location_manager = std::make_unique<IpLocationManager>();
+
+StatusOr<ColumnPtr> TaFunctions::get_ip_location(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL({columns[0]});
+    const auto& ip_column = columns[0];
+    const auto& [language_column, isp_column, asn_column]
+        = [&]() -> std::tuple<ColumnPtr, ColumnPtr, ColumnPtr> {
+        if (columns.size() == 1) {
+            return {nullptr, nullptr, nullptr};
+        }
+        if (columns.size() == 2) {
+            return {columns[1], nullptr, nullptr};
+        }
+        if (columns.size() == 3) {
+            return {columns[1], columns[2], nullptr};
+        }
+        return {columns[1], columns[2], columns[3]};
+    }();
+
+    if (language_column != nullptr && language_column->has_null()) {
+        return Status::InvalidArgument(
+            fmt::format("please input the second parameter(the language), in the following scope: ", LanguageEnumHelper::get_all_names()));
+    }
+
+    size_t chunk_size = ip_column->size();
+    size_t per_row_size = [&] {
+        if (isp_column == nullptr) {
+            return 4;
+        } else if (asn_column == nullptr) {
+            return 5;
+        } else {
+            return 6;
+        }
+    }();
+
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size * per_row_size);
+
+    UInt32Column::Ptr array_offsets = UInt32Column::create();
+    array_offsets->reserve(chunk_size + 1);
+    array_offsets->append(0);
+
+    const std::optional<std::string>& const_language = [&]() -> std::optional<std::string> {
+        if (language_column == nullptr) {
+            // 只有1个参数，默认用中文
+            return LanguageEnumHelper::get_name(LanguageEnum::ZH);
+        } else if (language_column->is_constant()) {
+            Slice slice = language_column->get(0).get_slice();
+            return std::string(slice.get_data(), slice.get_size());
+        } else {
+            return std::nullopt;
+        }
+    }();
+
+    std::optional<bool> const_isp = [&]() -> std::optional<bool> {
+        if (isp_column == nullptr) {
+            return false;
+        } else if (isp_column->is_constant()) {
+            return isp_column->get(0).get_int8();
+        } else {
+            return std::nullopt;
+        }
+    }();
+
+
+    std::optional<bool> const_asn = [&]() -> std::optional<bool> {
+        if (asn_column == nullptr) {
+            return false;
+        } else if (asn_column->is_constant()) {
+            return asn_column->get(0).get_int8();
+        } else {
+            return std::nullopt;
+        }
+    }();
+
+    const auto& ip_viewer = ColumnViewer<TYPE_VARCHAR> (ip_column);
+    size_t offset = 0;
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (ip_viewer.is_null(row)) {
+            array_offsets->append(offset);
+            continue;
+        }
+
+        const std::string& language = [&] {
+            if (const_language.has_value()) {
+                return const_language.value();
+            } else {
+                Slice slice = language_column->get(row).get_slice();
+                return std::string(slice.get_data(), slice.get_size());
+            }
+        }();
+
+        if (!LanguageEnumHelper::contains(language)) {
+            return Status::InvalidArgument(
+                        fmt::format("please input the second parameter(the language), in the following scope: ", LanguageEnumHelper::get_all_names()));
+        }
+        const Slice& ip = ip_viewer.value(row);
+        LanguageEnum language_enum = LanguageEnumHelper::get_by_name(language);
+        const auto& status = ip_location_manager->get_ip_location(ip.to_string(), language_enum);
+        if (!status.ok()) {
+            return status.status();
+        }
+        TaIpLocationDo ip_location_do = status.value();
+        builder.append(std::move(ip_location_do.country_code));
+        builder.append(std::move(ip_location_do.country));
+        builder.append(std::move(ip_location_do.province));
+        builder.append(std::move(ip_location_do.city));
+        offset += 4;
+
+        bool isp = const_isp.has_value() ? const_isp.value() : isp_column->get(row).get_int8();
+        if (isp_column != nullptr) {
+            // 需要isp列
+            builder.append(isp ? std::move(ip_location_do.isp) : "");
+            offset++;
+        }
+
+        bool asn = const_asn.has_value() ? const_asn.value() : asn_column->get(row).get_int8();
+        if (asn_column != nullptr) {
+            // 需要asn列
+            builder.append(asn ? std::move(ip_location_do.asn) : "");
+            offset++;
+        }
+        array_offsets->append(offset);
+    }
+    if (ip_column->is_nullable()) {
+        if (ip_column->has_null()) {
+            return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets),
+                                      NullColumn::create(*ColumnHelper::as_raw_column<NullableColumn>(ip_column)->null_column()));
+        } else {
+            return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets),
+                                     NullColumn::create(chunk_size, 0));
+        }
+    } else {
+        return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
+    }
+}
+
+
 } // namespace starrocks
