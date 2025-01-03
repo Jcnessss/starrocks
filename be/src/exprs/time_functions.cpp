@@ -523,11 +523,12 @@ DEFINE_UNARY_FN_WITH_IMPL(time_to_secImpl, v) {
 DEFINE_TIME_UNARY_FN(time_to_sec, TYPE_TIME, TYPE_BIGINT);
 
 DEFINE_UNARY_FN_WITH_IMPL(ta_to_date_intImpl, v) {
-    DateTimeValue dtv;
-    dtv.from_unixtime(v / 1000000, "+00:00");
-    return dtv.year() * 10000 + dtv.month() * 100 + dtv.day();
+    TimestampValue value = (TimestampValue) v;
+    int year, month, day;
+    date::to_date_with_cache(timestamp::to_julian(value._timestamp), &year, &month, &day);
+    return year * 10000 + month * 100 + day;
 }
-DEFINE_TIME_UNARY_FN(ta_to_date_int, TYPE_BIGINT, TYPE_INT);
+DEFINE_TIME_UNARY_FN(ta_to_date_int, TYPE_DATETIME, TYPE_INT);
 
 // month_name
 DEFINE_UNARY_FN_WITH_IMPL(month_nameImpl, v) {
