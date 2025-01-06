@@ -238,6 +238,7 @@ void SystemMetrics::_install_memory_metrics(MetricRegistry* registry) {
     registry->register_metric("jemalloc_retained_bytes", &_memory_metrics->jemalloc_retained_bytes);
 
     registry->register_metric("process_mem_bytes", &_memory_metrics->process_mem_bytes);
+    registry->register_metric("process_mem_limit_bytes", &_memory_metrics->process_mem_limit_bytes);
     registry->register_metric("query_mem_bytes", &_memory_metrics->query_mem_bytes);
     registry->register_metric("load_mem_bytes", &_memory_metrics->load_mem_bytes);
     registry->register_metric("metadata_mem_bytes", &_memory_metrics->metadata_mem_bytes);
@@ -319,6 +320,9 @@ void SystemMetrics::_update_memory_metrics() {
     }
 
     SET_MEM_METRIC_VALUE(process_mem_tracker, process_mem_bytes)
+    if (GlobalEnv::GetInstance()->process_mem_tracker() != nullptr) {                                   \
+        _memory_metrics->process_mem_limit_bytes.set_value(GlobalEnv::GetInstance()->process_mem_tracker()->limit()); \
+    }
     SET_MEM_METRIC_VALUE(query_pool_mem_tracker, query_mem_bytes)
     SET_MEM_METRIC_VALUE(load_mem_tracker, load_mem_bytes)
     SET_MEM_METRIC_VALUE(metadata_mem_tracker, metadata_mem_bytes)

@@ -79,7 +79,7 @@ void MemoryMetricsAction::getMemoryMetricTree(MemTracker* memTracker, std::strin
     result << "{";
     result << R"("name":")" << memTracker->label() << "\",";
     result << R"("size":")" << memTracker->consumption() << "\",";
-    result << R"("limit":")" << memTracker->limit() << "\",";
+    result << R"("limit":")" << memTracker->limit(  ) << "\",";
     result << R"("percent":")" << std::setprecision(3)
            << static_cast<double>(memTracker->consumption()) / total_size * 100 << "%\",";
     result << "\"child\":[";
