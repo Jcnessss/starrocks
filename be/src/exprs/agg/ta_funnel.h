@@ -69,24 +69,26 @@ public:
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        if (to->is_nullable()&& this->data(state)._data.size()==0) {
-            auto null_column = down_cast<NullableColumn*>(to)->null_column();
-            null_column->append(1);
+        auto* array_column = down_cast<ArrayColumn*>(to);
+        if (to->is_nullable() && this->data(state)._data.size()==0) {
+            auto null_columns = down_cast<NullableColumn*>(to);
+            null_columns->null_column()->append(1);
+            auto element = down_cast<ArrayColumn*>(to)->elements_column();
+            array_column->offsets_column()->append(array_column->offsets_column()->get_data().back());
             return;
         }
         if (to->is_nullable()){
             auto& null_column = down_cast<NullableColumn*>(to)->null_column();
             null_column->append(0);
         }
-        auto* dst = down_cast<ArrayColumn*>(to);
         const size_t size = data(state)._data.size();
-        auto* data_column  = down_cast<Int64Column*>(ColumnHelper::get_data_column(dst->elements_column().get()));
-        if (dst->elements().is_nullable()) {
-            auto& null_column = down_cast<NullableColumn*>(dst->elements_column().get())->null_column();
+        auto* data_column  = down_cast<Int64Column*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
+        if (array_column->elements().is_nullable()) {
+            auto& null_column = down_cast<NullableColumn*>(array_column->elements_column().get())->null_column();
             null_column->append(0);
         }
         data_column->get_data().insert(data_column->get_data().end(),data(state)._data.begin(),data(state)._data.end());
-        dst->offsets_column()->append(dst->offsets_column()->get_data().back()+size);
+        array_column->offsets_column()->append(array_column->offsets_column()->get_data().back()+size);
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
@@ -94,6 +96,8 @@ public:
         if (to->is_nullable()&& this->data(state)._data.size()==0) {
             auto null_column = down_cast<NullableColumn*>(to)->null_column();
             null_column->append(1);
+            auto element = down_cast<ArrayColumn*>(to)->elements_column();
+            array_column->offsets_column()->append(array_column->offsets_column()->get_data().back());
             return;
         }
         auto data_column  = down_cast<Int64Column*>(ColumnHelper::get_data_column(array_column->elements_column().get()));
@@ -109,7 +113,6 @@ public:
             auto null_column = down_cast<NullableColumn*>(to)->null_column();
             null_column->append(0);
         }
-        offset_column->append(offset_column->get_data().back()+elem_size);
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
@@ -132,7 +135,7 @@ public:
             }
             dst_column->offsets_column()->append(dst_column->offsets_column()->get_data().back()+total_step);
             if (dst_column->elements().is_nullable()){
-                auto& null_column = down_cast<NullableColumn*>(dst_column->elements_column().get())->null_column();
+                auto null_column = down_cast<NullableColumn*>(dst_column->elements_column().get())->null_column();
                 null_column->get_data().insert(null_column->get_data().end(),total_step,0);
             }
         }
