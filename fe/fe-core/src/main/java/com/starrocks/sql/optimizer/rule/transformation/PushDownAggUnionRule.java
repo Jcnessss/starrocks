@@ -56,6 +56,9 @@ public class PushDownAggUnionRule extends TransformationRule {
 
     @Override
     public boolean check(OptExpression input, OptimizerContext context) {
+        if (!context.getSessionVariable().isEnablePushDownAggUnion()) {
+            return false;
+        }
         LogicalAggregationOperator agg = (LogicalAggregationOperator) input.getOp();
         LogicalUnionOperator union = (LogicalUnionOperator) input.inputAt(0).getOp();
         return agg.getType() == LOCAL && union.isUnionAll();
