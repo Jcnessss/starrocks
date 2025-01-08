@@ -51,6 +51,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalNoCTEOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalProjectOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTopNOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalUnionOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalWindowOperator;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
@@ -136,6 +137,16 @@ public class CostModel {
         @Override
         public CostEstimate visitOperator(Operator node, ExpressionContext context) {
             return CostEstimate.zero();
+        }
+
+        @Override
+        public CostEstimate visitPhysicalUnion(PhysicalUnionOperator node, ExpressionContext context) {
+            Statistics statistics = context.getStatistics();
+            double totalSize = 0;
+            for (int i = 0; i < context.getChildrenStatistics().size(); i++) {
+                totalSize += context.getChildStatistics(i).getComputeSize();
+            }
+            return CostEstimate.of(statistics.getComputeSize(), totalSize, 0);
         }
 
         private CostEstimate adjustCostForMV(ExpressionContext context) {
