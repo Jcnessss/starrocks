@@ -980,7 +980,8 @@ public class AstBuilder extends AstVisitor<ParseNode, ParseTreeContext> {
             }
         } else if (node.getType().equalsIgnoreCase("json")) {
             return new com.starrocks.analysis.StringLiteral(node.getValue());
-        } else if (node.getType().equalsIgnoreCase("real")) {
+        } else if (node.getType().equalsIgnoreCase("real")
+                || node.getType().equalsIgnoreCase("double")) {
             try {
                 return new FloatLiteral(node.getValue());
             } catch (AnalysisException e) {
