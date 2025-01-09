@@ -376,15 +376,33 @@ void BinaryColumnBase<T>::update_rows(const Column& src, const uint32_t* indexes
 template <typename T>
 void BinaryColumnBase<T>::assign(size_t n, size_t idx) {
     std::string value = std::string((char*)_bytes.data() + _offsets[idx], _offsets[idx + 1] - _offsets[idx]);
+   
     _bytes.clear();
     _offsets.clear();
-    _offsets.emplace_back(0);
-    const auto* const start = reinterpret_cast<const Bytes::value_type*>(value.data());
-    const uint8_t* const end = start + value.size();
-    for (int i = 0; i < n; ++i) {
-        _bytes.insert(_bytes.end(), start, end);
-        _offsets.emplace_back(_bytes.size());
+
+    size_t value_size = value.size();
+
+    _bytes.resize(n * value_size);
+    _offsets.resize(n + 1);
+
+    uint8_t* dest = _bytes.data();
+    const uint8_t* src = reinterpret_cast<const uint8_t*>(value.data());
+
+    // 填充第一段数据
+    strings::memcpy_inlined(dest, src, value_size);
+
+    // 使用倍增法填充剩余部分
+    size_t copied_size = value_size;
+    while (copied_size < n * value_size) {
+        size_t copy_chunk = std::min(copied_size, n * value_size - copied_size);
+        strings::memcpy_inlined(dest + copied_size, dest, copy_chunk);
+        copied_size += copy_chunk;
     }
+
+    for (size_t i = 0; i <= n; ++i) {
+        _offsets[i] = i * value_size;
+    }
+
     _slices_cache = false;
 }
 
