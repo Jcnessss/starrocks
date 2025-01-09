@@ -150,7 +150,7 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         List<Optional<ConstantOperator>> casted =
                 valuesOperatorList.stream().map(x ->  ((ConstantOperator) x).castTo(targetType)).collect(Collectors.toList());
         List<Object> literalValues = new ArrayList<>(valuesOperatorList.size());
-        for (int i = 0; i < valuesOperatorList.size(); i++) {
+        for (int i = 0; i < casted.size(); i++) {
             Object literal = getLiteral(casted.get(i).isPresent() ? casted.get(i).get() : valuesOperatorList.get(i));
             if (literal == null) {
                 return Lists.newArrayList();
