@@ -865,7 +865,8 @@ StatusOr<ColumnPtr> TaFunctions::ta_extend_date(FunctionContext* context, const 
     auto& range_type = ColumnViewer<TYPE_VARCHAR> (columns[1]).value(0);
     auto& range_param = ColumnViewer<TYPE_VARCHAR> (columns[2]).value(0);
 
-    const auto& s = getBelongRange(timestamps, sliceToRangeType.at(range_type), range_param);
+    const auto& s = getBelongRange(timestamps,
+        sliceToRangeType.at(boost::algorithm::to_lower_copy(std::string(range_type))), range_param);
     if (!s.ok()) {
         return to_status(s.status());
     }
