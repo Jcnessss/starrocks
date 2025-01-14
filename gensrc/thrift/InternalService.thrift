@@ -373,6 +373,10 @@ struct TPlanFragmentExecParams {
 
   54: optional bool enable_exchange_perf
 
+  55: optional i32 exchange_pass_through_chunk_soft_limit
+
+  56: optional i32 exchange_pass_through_sleep_ms
+
   70: optional i32 pipeline_sink_dop
 
   73: optional bool report_when_finish;

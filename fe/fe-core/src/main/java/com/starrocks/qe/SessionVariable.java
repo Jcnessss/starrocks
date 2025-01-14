@@ -417,6 +417,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_EXCHANGE_PASS_THROUGH = "enable_exchange_pass_through";
     public static final String ENABLE_EXCHANGE_PERF = "enable_exchange_perf";
 
+    public static final String EXCHANGE_PASS_THROUGH_LIMIT = "exchange_pass_through_chunk_soft_limit";
+
+    public static final String EXCHANGE_PASS_THROUGH_SLEEP_MS = "exchange_pass_through_sleep_ms";
+
     public static final String SINGLE_NODE_EXEC_PLAN = "single_node_exec_plan";
 
     public static final String ALLOW_DEFAULT_PARTITION = "allow_default_partition";
@@ -1415,6 +1419,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_EXCHANGE_PERF, flag = VariableMgr.INVISIBLE)
     private boolean enableExchangePerf = false;
+
+    @VariableMgr.VarAttr(name = EXCHANGE_PASS_THROUGH_LIMIT, flag = VariableMgr.INVISIBLE)
+    private int exchangePassThroughLimit = 0;
+
+    @VariableMgr.VarAttr(name = EXCHANGE_PASS_THROUGH_SLEEP_MS, flag = VariableMgr.INVISIBLE)
+    private int exchangePassThroughSleepMs = 0;
 
     @VariableMgr.VarAttr(name = ALLOW_DEFAULT_PARTITION, flag = VariableMgr.INVISIBLE)
     private boolean allowDefaultPartition = false;
@@ -3370,6 +3380,22 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableExchangePerf() {
         return enableExchangePerf;
+    }
+
+    public int getExchangePassThroughSoftLimit() {
+        return exchangePassThroughLimit;
+    }
+
+    public int getExchangePassThroughSleepMs() {
+        return exchangePassThroughSleepMs;
+    }
+
+    public int setExchangePassThroughSoftLimit(int value) {
+        return this.exchangePassThroughLimit = value;
+    }
+
+    public int setExchangePassThroughSleepMs(int value) {
+        return this.exchangePassThroughSleepMs = value;
     }
 
     public boolean isAllowDefaultPartition() {

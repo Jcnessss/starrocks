@@ -60,6 +60,10 @@ public:
         _physical_bytes = 0;
     }
 
+    int buffer_size() {
+        return _buffer.size();
+    }
+
 private:
     std::mutex _mutex; // lock-step to push/pull chunks
     ChunkUniquePtrVector _buffer;
@@ -78,6 +82,16 @@ public:
             auto* channel = new PassThroughSenderChannel(_total_bytes);
             _sender_id_to_channel.emplace(sender_id, channel);
             return channel;
+        } else {
+            return it->second;
+        }
+    }
+
+    PassThroughSenderChannel* get_sender_channel(int sender_id) {
+        std::unique_lock lock(_mutex);
+        auto it = _sender_id_to_channel.find(sender_id);
+        if (it == _sender_id_to_channel.end()) {
+            return nullptr;
         } else {
             return it->second;
         }
@@ -125,6 +139,17 @@ PassThroughChannel* PassThroughChunkBuffer::get_or_create_channel(const Key& key
 
 void PassThroughContext::init() {
     _channel = _chunk_buffer->get_or_create_channel(PassThroughChunkBuffer::Key(_fragment_instance_id, _node_id));
+}
+
+bool PassThroughContext::need_input(int sender_id, int limit) {
+    PassThroughSenderChannel* sender_channel = _channel->get_sender_channel(sender_id);
+    if (sender_channel == nullptr) {
+        return true;
+    }
+    if (sender_channel->buffer_size() > limit) {
+        return false;
+    }
+    return true;
 }
 
 void PassThroughContext::append_chunk(int sender_id, const Chunk* chunk, size_t chunk_size, int32_t driver_sequence) {

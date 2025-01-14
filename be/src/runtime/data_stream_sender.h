@@ -80,7 +80,7 @@ public:
     DataStreamSender(RuntimeState* state, int sender_id, const RowDescriptor& row_desc, const TDataStreamSink& sink,
                      const std::vector<TPlanFragmentDestination>& destinations,
                      bool send_query_statistics_with_every_batch, bool enable_exchange_pass_through,
-                     bool enable_exchange_perf);
+                     bool enable_exchange_perf, int exchange_pass_through_chunk_soft_limit, int exchange_pass_through_sleep_ms);
     ~DataStreamSender() override;
 
     Status init(const TDataSink& thrift_sink, RuntimeState* state) override;
@@ -120,6 +120,8 @@ public:
 
     const bool get_enable_exchange_pass_through() const { return _enable_exchange_pass_through; }
     const bool get_enable_exchange_perf() const { return _enable_exchange_perf; };
+    const int get_exchange_pass_through_chunk_soft_limit() const { return _exchange_pass_through_chunk_soft_limit; }
+    const int get_exchange_pass_through_sleep_ms() const { return _exchange_pass_through_sleep_ms; };
 
     const std::vector<int32_t>& output_columns() const { return _output_columns; }
 
@@ -206,6 +208,8 @@ private:
 
     bool _enable_exchange_pass_through = false;
     bool _enable_exchange_perf = false;
+    int _exchange_pass_through_chunk_soft_limit = 0;
+    int _exchange_pass_through_sleep_ms = 0;
 
     // Specify the columns which need to send
     std::vector<int32_t> _output_columns;

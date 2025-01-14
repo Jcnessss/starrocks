@@ -139,6 +139,8 @@ public class TFragmentInstanceFactory {
                 result.setEnable_shared_scan(sessionVariable.isEnableSharedScan());
                 result.params.setEnable_exchange_pass_through(sessionVariable.isEnableExchangePassThrough());
                 result.params.setEnable_exchange_perf(sessionVariable.isEnableExchangePerf());
+                result.params.setExchange_pass_through_chunk_soft_limit(sessionVariable.getExchangePassThroughSoftLimit());
+                result.params.setExchange_pass_through_sleep_ms(sessionVariable.getExchangePassThroughSleepMs());
 
                 result.setEnable_resource_group(true);
                 if (jobSpec.getResourceGroup() != null) {

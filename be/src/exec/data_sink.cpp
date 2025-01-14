@@ -96,9 +96,15 @@ static std::unique_ptr<DataStreamSender> create_data_stream_sink(
             params.__isset.enable_exchange_pass_through && params.enable_exchange_pass_through;
     bool enable_exchange_perf = params.__isset.enable_exchange_perf && params.enable_exchange_perf;
 
+    int exchange_pass_through_chunk_soft_limit = params.__isset.exchange_pass_through_chunk_soft_limit
+                                                 ? exchange_pass_through_chunk_soft_limit : 0;
+    int exchange_pass_through_sleep_ms = params.__isset.exchange_pass_through_sleep_ms
+                                                       ? exchange_pass_through_sleep_ms : 0;
+
     return std::make_unique<DataStreamSender>(state, sender_id, row_desc, data_stream_sink, destinations,
                                               send_query_statistics_with_every_batch, enable_exchange_pass_through,
-                                              enable_exchange_perf);
+                                              enable_exchange_perf, exchange_pass_through_chunk_soft_limit,
+                                              exchange_pass_through_sleep_ms);
 }
 
 Status DataSink::create_data_sink(RuntimeState* state, const TDataSink& thrift_sink,
@@ -465,7 +471,8 @@ OperatorFactoryPtr DataSink::_create_exchange_sink_operator(pipeline::PipelineBu
             sender->destinations(), is_pipeline_level_shuffle, dest_dop, sender->sender_id(),
             sender->get_dest_node_id(), sender->get_partition_exprs(),
             !is_dest_merge && sender->get_enable_exchange_pass_through(),
-            sender->get_enable_exchange_perf() && !context->has_aggregation, fragment_ctx, sender->output_columns());
+            sender->get_enable_exchange_perf() && !context->has_aggregation, fragment_ctx, sender->output_columns(),
+            sender->get_exchange_pass_through_chunk_soft_limit(), sender->get_exchange_pass_through_sleep_ms());
     return exchange_sink;
 }
 
