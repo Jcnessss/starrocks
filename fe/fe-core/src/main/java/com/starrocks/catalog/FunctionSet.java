@@ -520,6 +520,9 @@ public class FunctionSet {
 
     public static final String BUILD_USER_INTERVAL_AGG_GROUPED = "build_user_interval_agg_grouped";
 
+    public static final String ATTRIBUTION_DATA = "attribution_data";
+    public static final String ATTRIBUTION_DATA_RELATION = "attribution_data_relation";
+
     public static final String QUARTERS_ADD = "quarters_add";
     public static final String QUARTERS_SUB = "quarters_sub";
     public static final String WEEKS_ADD = "weeks_add";
@@ -1616,6 +1619,26 @@ public class FunctionSet {
                 Lists.newArrayList(Type.BIGINT, Type.DATETIME, Type.BIGINT, Type.ARRAY_VARCHAR, Type.BIGINT, Type.BIGINT, Type.BIGINT),
                 retType, Type.VARBINARY, false, false, false));
 
+        registerAttributionDataFunction();
+    }
+
+    private void registerAttributionDataFunction() {
+        List<StructField> fields = Lists.newArrayList();
+        fields.add(new StructField("eventId", Type.BIGINT));
+        fields.add(new StructField("totalValue", Type.BIGINT));
+        fields.add(new StructField("eventValidValue", Type.BIGINT));
+        fields.add(new StructField("goalConversion", Type.DOUBLE));
+        fields.add(new StructField("sourceGroup", Type.ARRAY_VARCHAR));
+        fields.add(new StructField("targetGroup", Type.ARRAY_VARCHAR));
+        ArrayType retType = new ArrayType(new StructType(fields, true));
+        addBuiltin(AggregateFunction.createBuiltin(ATTRIBUTION_DATA,
+                Lists.newArrayList(Type.BIGINT, Type.BIGINT, Type.DATETIME, Type.DOUBLE, Type.BIGINT, Type.BIGINT,
+                        Type.BIGINT, Type.BOOLEAN, Type.ARRAY_VARCHAR, Type.ARRAY_VARCHAR),
+                retType, Type.VARBINARY, false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(ATTRIBUTION_DATA_RELATION,
+                Lists.newArrayList(Type.BIGINT, Type.BIGINT, Type.DATETIME, Type.DOUBLE, Type.BIGINT, Type.BIGINT,
+                        Type.BIGINT, Type.BOOLEAN, Type.ARRAY_VARCHAR, Type.ARRAY_VARCHAR, Type.VARCHAR, Type.ARRAY_VARCHAR),
+                retType, Type.VARBINARY, false, false, false));
     }
 
     public List<Function> getBuiltinFunctions() {

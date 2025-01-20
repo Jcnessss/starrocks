@@ -103,6 +103,10 @@ void AggregateFuncResolver::register_others() {
                                 false, AggregateFactory::MakeIntervalAggregateFunction());
     add_general_mapping_notnull("build_user_interval_agg_grouped",
                                 false, AggregateFactory::MakeIntervalGroupAggregateFunction());
+    add_general_mapping_notnull("attribution_data",
+                                false, AggregateFactory::MakeAttributionAggFunction());
+    add_general_mapping_notnull("attribution_data_relation",
+                                false, AggregateFactory::MakeAttributeRelationAggregateFunction());
 }
 
 } // namespace starrocks

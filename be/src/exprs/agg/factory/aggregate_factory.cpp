@@ -37,6 +37,8 @@
 #include "exprs/agg/ta_funnel.h"
 #include "exprs/agg/interval_agg_ta.h"
 #include "exprs/agg/interval_agg_group_ta.h"
+#include "exprs/agg/attribution_data.h"
+#include "exprs/agg/attribution_relation.h"
 #include "types/logical_type.h"
 #include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
@@ -155,6 +157,14 @@ AggregateFunctionPtr AggregateFactory::MakeIntervalAggregateFunction() {
 
 AggregateFunctionPtr AggregateFactory::MakeIntervalGroupAggregateFunction() {
     return std::make_shared<IntervalGroupAggFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeAttributionAggFunction() {
+    return std::make_shared<AttributionAggFunction>();
+}
+
+AggregateFunctionPtr AggregateFactory::MakeAttributeRelationAggregateFunction() {
+    return std::make_shared<AttributionRelationAggFunction>();
 }
 
 AggregateFunctionPtr AggregateFactory::MakeHllUnionAggregateFunction() {

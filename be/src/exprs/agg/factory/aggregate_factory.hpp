@@ -201,6 +201,9 @@ public:
     static AggregateFunctionPtr MakeIntervalAggregateFunction();
     static AggregateFunctionPtr MakeIntervalGroupAggregateFunction();
 
+    static AggregateFunctionPtr MakeAttributionAggFunction();
+    static AggregateFunctionPtr MakeAttributeRelationAggregateFunction();
+
 
     // Hyperloglog functions:
     static AggregateFunctionPtr MakeHllUnionAggregateFunction();
