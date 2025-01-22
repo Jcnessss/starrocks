@@ -18,7 +18,7 @@
 #include <iomanip>
 #include <utility>
 
-
+#include "exprs/jsonpath.h"
 #include "column/column_builder.h"
 #include "column/column_viewer.h"
 #include "column/array_column.h"
@@ -1450,6 +1450,253 @@ StatusOr<ColumnPtr> TaFunctions::get_ip_location(FunctionContext* context, const
             return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets),
                                      NullColumn::create(chunk_size, 0));
         }
+    } else {
+        return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
+    }
+}
+
+inline int to_positive(int number) {
+    return number & 2147483647;
+}
+
+inline int murmur2(const Slice& data) {
+    int length = data.size;
+    int seed = -1756908916;
+    int h = seed ^ length;
+    int length4 = length / 4;
+
+    for (int i = 0; i < length4; i++) {
+        int i4 = i * 4;
+        int k = (data[i4 + 0] & 255) + ((data[i4 + 1] & 255) << 8) + ((data[i4 + 2] & 255) << 16) + ((data[i4 + 3] & 255) << 24);
+        k *= 1540483477;
+        k ^= static_cast<uint32_t>(k) >> 24;
+        k *= 1540483477;
+        h *= 1540483477;
+        h ^= k;
+    }
+
+    switch (length % 4) {
+        case 3:
+            h ^= (data[(length & -4) + 2] & 255) << 16;
+            [[fallthrough]];
+        case 2:
+            h ^= (data[(length & -4) + 1] & 255) << 8;
+            [[fallthrough]];
+        case 1:
+            h ^= data[length & -4] & 255;
+            h *= 1540483477;
+            [[fallthrough]];
+        default:
+            h ^= static_cast<uint32_t>(h) >> 13;
+            h *= 1540483477;
+            h ^= static_cast<uint32_t>(h) >> 15;
+        return h;
+    }
+}
+
+
+StatusOr<ColumnPtr> TaFunctions::get_kafka_partition(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    const auto& key_column = columns[0];
+    const auto& partition_column = columns[1];
+
+    size_t chunk_size = key_column->size();
+    ColumnBuilder<TYPE_INT> builder(chunk_size);
+
+    auto const_partition_number = partition_column->is_constant() ?
+        std::optional(ColumnHelper::get_const_value<TYPE_INT>(partition_column)) : std::nullopt;
+
+    auto get_partition_number = [&](size_t row_number) -> int {
+        if (const_partition_number.has_value()) {
+            return const_partition_number.value();
+        } else {
+            return partition_column->get(row_number).get_int32();
+        }
+    };
+
+    const auto& keys_viewer = ColumnViewer<TYPE_VARCHAR> (key_column);
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (keys_viewer.is_null(row)) {
+            builder.append_null();
+            continue;
+        }
+        const Slice& key = keys_viewer.value(row);
+        int partition_number = get_partition_number(row);
+        int kafka_partition_number = to_positive(murmur2(key)) % partition_number;
+        builder.append(kafka_partition_number);
+    }
+    if (key_column->is_nullable()) {
+        return builder.build_nullable_column();
+    } else {
+        return builder.build(key_column->is_constant());
+    }
+}
+
+vpack::Slice TaFunctions::parse_json_get_slice(const Slice& input, const Slice& key, vpack::Builder& builder) {
+    const auto& parse_json_status = JsonValue::parse(input);
+    if (!parse_json_status.ok()) {
+        return {};
+    }
+    const auto& json_value = parse_json_status.value();
+
+    const auto& json_path_status = JsonPath::parse(key);
+    if (!json_path_status.ok()) {
+        return {};
+    }
+    const auto& json_path = json_path_status.value();
+
+    return JsonPath::extract(&json_value, json_path, &builder);
+}
+
+std::string TaFunctions::parse_json_get_str(const vpack::Slice& input) {
+    if (input.isNone()) {
+        return {};
+    }
+    vpack::ValueLength len;
+    const char* str = input.getStringUnchecked(len);
+    return {str, len};
+}
+
+std::string TaFunctions::parse_json_get_str(const Slice& input, const Slice& key) {
+    vpack::Builder builder;
+    const auto& slice = parse_json_get_slice(input, key, builder);
+    return parse_json_get_str(slice);
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_kafka_value_varchar(FunctionContext* context, const Columns& columns, const Slice& key) {
+    RETURN_IF_COLUMNS_ONLY_NULL({columns[0]});
+
+    const auto& slice_column = columns[0];
+    size_t chunk_size = slice_column->size();
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size);
+
+    const auto& slice_viewer = ColumnViewer<TYPE_VARCHAR> (slice_column);
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (slice_viewer.is_null(row)) {
+            builder.append_null();
+            continue;
+        }
+        const Slice& slice = slice_viewer.value(row);
+        const auto& value = parse_json_get_str(slice, key);
+        if (value.empty()) {
+            builder.append_null();
+        } else {
+            builder.append(value);
+        }
+    }
+    if (slice_column->is_nullable()) {
+        return builder.build_nullable_column();
+    } else {
+        return builder.build(slice_column->is_constant());
+    }
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_appid(FunctionContext* context, const Columns& columns) {
+    return get_kafka_value_varchar(context, columns, Slice(appid_key.data(), appid_key.size()));
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_client_ip(FunctionContext *context, const Columns &columns) {
+    return get_kafka_value_varchar(context, columns, Slice(client_id_key.data(), client_id_key.size()));
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_source(FunctionContext *context, const Columns &columns) {
+    return get_kafka_value_varchar(context, columns, Slice(source_key.data(), source_key.size()));
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_automatic_data(FunctionContext* context, const Columns& columns) {
+    return get_kafka_value_varchar(context, columns, Slice(automatic_data_key.data(), automatic_data_key.size()));
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_receive_time(FunctionContext *context, const Columns &columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL({columns[0]});
+
+    const auto& slice_column = columns[0];
+    size_t chunk_size = slice_column->size();
+    ColumnBuilder<TYPE_DATETIME> builder(chunk_size);
+
+    const auto& slice_viewer = ColumnViewer<TYPE_VARCHAR> (slice_column);
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (slice_viewer.is_null(row)) {
+            builder.append_null();
+            continue;
+        }
+        const Slice& slice = slice_viewer.value(row);
+        const auto& value = parse_json_get_str(slice, Slice(receive_time_key.data(), receive_time_key.size()));
+        if (value.empty()) {
+            builder.append_null();
+        } else {
+            TimestampValue timestamp_value;
+            bool valid = timestamp_value.from_string(value.data(), value.size());
+            valid ? builder.append(timestamp_value) : builder.append_null();
+        }
+    }
+    if (slice_column->is_nullable()) {
+        return builder.build_nullable_column();
+    } else {
+        return builder.build(slice_column->is_constant());
+    }
+}
+
+std::string TaFunctions::parse_json_get_str(const JsonValue& json_value) {
+    auto status = json_value.to_string();
+    if (!status.ok()) {
+        return {};
+    }
+    return status.value();
+}
+
+StatusOr<ColumnPtr> TaFunctions::get_ta_data_array(FunctionContext* context, const Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL({columns[0]});
+
+    const auto& slice_column = columns[0];
+    size_t chunk_size = slice_column->size();
+    ColumnBuilder<TYPE_VARCHAR> builder(chunk_size);
+
+    UInt32Column::Ptr array_offsets = UInt32Column::create();
+    array_offsets->reserve(chunk_size + 1);
+    array_offsets->append(0);
+
+    NullColumn::Ptr array_null_column = NullColumn::create();
+    array_null_column->reserve(chunk_size);
+
+    const auto& slice_viewer = ColumnViewer<TYPE_VARCHAR> (slice_column);
+    size_t offset = 0;
+    bool has_null = false;
+    for (size_t row = 0; row < chunk_size; row++) {
+        if (slice_viewer.is_null(row)) {
+            builder.append_null();
+            array_offsets->append(offset);
+            array_null_column->append(DATUM_NULL);
+            has_null = true;
+            continue;
+        }
+        const Slice& slice = slice_viewer.value(row);
+        vpack::Builder v_builder;
+        const auto& value = parse_json_get_slice(slice, Slice(data_array_key.data(), data_array_key.size()), v_builder);
+        if (value.isNone() || !value.isArray()) {
+            builder.append_null();
+            array_offsets->append(offset);
+            array_null_column->append(DATUM_NULL);
+            has_null = true;
+        } else {
+            for (const auto& element : vpack::ArrayIterator(value)) {
+                JsonValue json_value(element);
+                const auto& array_str = parse_json_get_str(json_value);
+                if (array_str.empty()) {
+                    builder.append_null();
+                } else {
+                    builder.append(array_str);
+                    offset++;
+                }
+            }
+            array_offsets->append(offset);
+            array_null_column->append(DATUM_NOT_NULL);
+        }
+    }
+
+    if (slice_column->is_nullable() || has_null) {
+        return NullableColumn::create(ArrayColumn::create(builder.build_nullable_column(), array_offsets), array_null_column);
     } else {
         return ArrayColumn::create(builder.build_nullable_column(), array_offsets);
     }

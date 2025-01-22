@@ -100,6 +100,14 @@ public:
      */
     DEFINE_VECTORIZED_FN(get_ip_location);
 
+    DEFINE_VECTORIZED_FN(get_kafka_partition);
+    DEFINE_VECTORIZED_FN(get_ta_appid);
+    DEFINE_VECTORIZED_FN(get_ta_automatic_data);
+    DEFINE_VECTORIZED_FN(get_ta_client_ip);
+    DEFINE_VECTORIZED_FN(get_ta_data_array);
+    DEFINE_VECTORIZED_FN(get_ta_receive_time);
+    DEFINE_VECTORIZED_FN(get_ta_source);
+
 private:
     static const std::map<Slice, RangeType> sliceToRangeType;
     constexpr static std::string_view kudu_array_delimiter = "\t";
@@ -125,6 +133,20 @@ private:
     static int calculate_scale(uint64_t significand, int exponent);
     static std::string format_number(double v, uint64_t significand, int exponent, bool is_negative);
     static std::unique_ptr<IpLocationManager> ip_location_manager;
+
+    constexpr static std::string_view appid_key = "$.appid";
+    constexpr static std::string_view client_id_key = "$.client_ip";
+    constexpr static std::string_view receive_time_key = "$.receive_time";
+    constexpr static std::string_view source_key = "$.source";
+    constexpr static std::string_view data_object_key = "$.data_object";
+    constexpr static std::string_view data_array_key = "$.data_object.data";
+    constexpr static std::string_view automatic_data_key = "$.data_object.automaticData";
+
+    static vpack::Slice parse_json_get_slice(const Slice& input, const Slice& key, vpack::Builder& builder);
+    static std::string parse_json_get_str(const Slice& input, const Slice& key);
+    static std::string parse_json_get_str(const vpack::Slice& input);
+    static std::string parse_json_get_str(const JsonValue& json_value);
+    static StatusOr<ColumnPtr> get_kafka_value_varchar(FunctionContext* context, const Columns& columns, const Slice& key);
 };
 
 } // namespace starrocks

@@ -1350,6 +1350,14 @@ vectorized_functions = [
     [350009, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'BOOLEAN'], 'TaFunctions::get_ip_location'],
     [350010, 'get_ip_location', True, False, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'BOOLEAN', 'BOOLEAN'], 'TaFunctions::get_ip_location'],
 
+    [350011, 'get_kafka_partition', True, False, 'INT', ['VARCHAR', 'INT'], 'TaFunctions::get_kafka_partition'],
+    [350012, 'get_ta_appid', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::get_ta_appid'],
+    [350013, 'get_ta_automatic_data', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::get_ta_automatic_data'],
+    [350014, 'get_ta_client_ip', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::get_ta_client_ip'],
+    [350015, 'get_ta_data_array', True, False, 'ARRAY_VARCHAR', ['VARCHAR'], 'TaFunctions::get_ta_data_array'],
+    [350016, 'get_ta_receive_time', True, False, 'DATETIME', ['VARCHAR'], 'TaFunctions::get_ta_receive_time'],
+    [350017, 'get_ta_source', True, False, 'VARCHAR', ['VARCHAR'], 'TaFunctions::get_ta_source'],
+
     [350018, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR'], 'TaFunctions::ta_extend_date'],
     [350019, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR', 'DATETIME', 'DATETIME'], 'TaFunctions::ta_extend_date'],
     [350020, 'ta_extend_date', True, False, 'ARRAY_DATETIME', ['DATETIME', 'VARCHAR', 'VARCHAR', 'DATETIME', 'DATETIME', 'ARRAY_DATETIME'], 'TaFunctions::ta_extend_date'],
