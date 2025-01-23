@@ -36,9 +36,9 @@ struct PercentileDiscDispatcher {
 };
 
 void AggregateFuncResolver::register_others() {
-    add_aggregate_mapping_notnull<TYPE_BIGINT, TYPE_DOUBLE>("percentile_approx", false,
+    add_aggregate_mapping_notnull<TYPE_BIGINT, TYPE_DOUBLE>("percentile_approx", true,
                                                             AggregateFactory::MakePercentileApproxAggregateFunction());
-    add_aggregate_mapping_notnull<TYPE_DOUBLE, TYPE_DOUBLE>("percentile_approx", false,
+    add_aggregate_mapping_notnull<TYPE_DOUBLE, TYPE_DOUBLE>("percentile_approx", true,
                                                             AggregateFactory::MakePercentileApproxAggregateFunction());
     add_aggregate_mapping<TYPE_PERCENTILE, TYPE_PERCENTILE, PercentileValue>(
             "percentile_union", false, AggregateFactory::MakePercentileUnionAggregateFunction());

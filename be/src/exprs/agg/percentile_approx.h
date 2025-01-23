@@ -37,6 +37,37 @@ public:
 class PercentileApproxAggregateFunction final
         : public AggregateFunctionBatchHelper<PercentileApproxState, PercentileApproxAggregateFunction> {
 public:
+    void reset(FunctionContext* ctx, const Columns& args, AggDataPtr __restrict state) const override {
+        this->data(state).percentile.reset(new PercentileValue());
+        this->data(state).targetQuantile = -1.0;
+        this->data(state).is_null = true;
+    }
+
+    void update_batch_single_state_with_frame(FunctionContext* ctx, AggDataPtr __restrict state, const Column** columns,
+                                                int64_t peer_group_start, int64_t peer_group_end, int64_t frame_start,
+                                                int64_t frame_end) const override {
+        bool nullable = columns[0]->is_nullable();
+        if (nullable) {
+            const auto* column = down_cast<const NullableColumn*>(columns[0]);
+            for (size_t i = frame_start; i < frame_end; ++i) {
+                if (!columns[0]->is_null(i)) {
+                    double value = column->data_column()->get(i).get_double();
+                    data(state).percentile->add(implicit_cast<float>(value));
+                    data(state).targetQuantile = columns[1]->get(0).get_double();
+                    data(state).is_null = false;
+                }
+            }
+        } else {
+            const auto* column = down_cast<const DoubleColumn*>(columns[0]);
+            for (size_t i = frame_start; i < frame_end; ++i) {
+                double value = column->get_data()[i];
+                data(state).percentile->add(implicit_cast<float>(value));
+                data(state).targetQuantile = columns[1]->get(0).get_double();
+                data(state).is_null = false;
+            }
+        }
+    }
+
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr state, size_t row_num) const override {
         double column_value;
         if (columns[0]->is_nullable()) {
@@ -155,6 +186,36 @@ public:
 
                 result->get_offset()[i + 1] = new_size;
                 old_size = new_size;
+            }
+        }
+    }
+
+    void get_values(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* dst, size_t start,
+                    size_t end) const override {
+        DCHECK_GT(end, start);
+
+        if (dst->is_nullable()) {
+            auto* nullable_column = down_cast<NullableColumn*>(dst);
+            if (data(state).is_null) {
+                nullable_column->append_default(end - start + 1);
+                return;
+            }
+
+            double result = data(state).percentile->quantile(data(state).targetQuantile);
+            auto* data_column = down_cast<DoubleColumn*>(nullable_column->data_column().get());
+            for (size_t i = start; i < end; ++i) {
+                data_column->get_data()[i] = result;
+                nullable_column->null_column_data().push_back(0);
+            }
+        } else {
+            auto* data_column = down_cast<DoubleColumn*>(dst);
+            if (data(state).is_null) {
+                return;
+            }
+
+            double result = data(state).percentile->quantile(data(state).targetQuantile);
+            for (size_t i = start; i < end; ++i) {
+                data_column->get_data()[i] = result;
             }
         }
     }

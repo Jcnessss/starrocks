@@ -1532,10 +1532,10 @@ public class FunctionSet {
         // PercentileApprox
         addBuiltin(AggregateFunction.createBuiltin(PERCENTILE_APPROX,
                 Lists.newArrayList(Type.DOUBLE, Type.DOUBLE), Type.DOUBLE, Type.VARBINARY,
-                false, false, false));
+                false, true, false));
         addBuiltin(AggregateFunction.createBuiltin(PERCENTILE_APPROX,
                 Lists.newArrayList(Type.DOUBLE, Type.DOUBLE, Type.DOUBLE), Type.DOUBLE, Type.VARBINARY,
-                false, false, false));
+                false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(PERCENTILE_UNION,
                 Lists.newArrayList(Type.PERCENTILE), Type.PERCENTILE, Type.PERCENTILE,
