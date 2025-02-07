@@ -226,6 +226,7 @@ public class PolymorphicFunctionAnalyzer {
             .put(FunctionSet.ZIP, new LambdaDeduce())
             .put(FunctionSet.MAP_AGG, new MapAggDeduce())
             .put(FunctionSet.MIN_BY, types -> types[0])
+            .put(FunctionSet.MAX_BY, types -> types[0])
             .build();
 
     private static Function resolveByDeducingReturnType(Function fn, Type[] inputArgTypes) {

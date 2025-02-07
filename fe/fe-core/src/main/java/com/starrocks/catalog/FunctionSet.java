@@ -1073,7 +1073,7 @@ public class FunctionSet {
 
             // MAX_BY
             for (Type t1 : Type.getSupportedTypes()) {
-                if (t1.isFunctionType() || t1.isNull() || t1.isChar() || t1.isPseudoType()) {
+                if (t1.isFunctionType() || t1.isNull() || t1.isChar()) {
                     continue;
                 }
                 addBuiltin(AggregateFunction.createBuiltin(
