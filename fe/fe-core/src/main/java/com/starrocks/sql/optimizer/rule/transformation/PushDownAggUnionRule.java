@@ -129,6 +129,11 @@ public class PushDownAggUnionRule extends TransformationRule {
             unionInputs.add(columns.getColumnRefOperators(context.getColumnRefFactory()));
         }
         List<ColumnRefOperator> aggOutput = agg.getOutputColumns(null).getColumnRefOperators(context.getColumnRefFactory());
+        for (int i = 0; i < aggOutput.size(); i++) {
+            if (agg.getAggregations().containsKey(aggOutput.get(i))) {
+                aggOutput.get(i).setType(agg.getAggregations().get(aggOutput.get(i)).getType());
+            }
+        }
         LogicalUnionOperator newUnion = new LogicalUnionOperator(aggOutput, unionInputs, union.isUnionAll());
         return Lists.newArrayList(OptExpression.create(newUnion, aggs));
     }
