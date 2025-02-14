@@ -846,7 +846,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableRuntimeAdaptiveDop = false;
 
     @VariableMgr.VarAttr(name = ENABLE_PUSHDOWN_AGG_UNION)
-    private boolean enablePushDownAggUnion = false;
+    private boolean enablePushDownAggUnion = true;
 
     @VariableMgr.VarAttr(name = ADAPTIVE_DOP_MAX_BLOCK_ROWS_PER_DRIVER_SEQ, flag = VariableMgr.INVISIBLE)
     private long adaptiveDopMaxBlockRowsPerDriverSeq = 4096L * 4;
