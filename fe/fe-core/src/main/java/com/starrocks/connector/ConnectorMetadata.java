@@ -187,6 +187,10 @@ public interface ConnectorMetadata {
         return Lists.newArrayList();
     }
 
+    default boolean partitionExists(Table table, String partitionName) {
+        return false;
+    }
+
     /**
      * Get statistics for the table.
      *

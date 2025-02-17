@@ -49,6 +49,7 @@ public:
         FileStatistics file_statistics;
         std::string location;
         std::function<void()> rollback_action;
+        std::string partition_name;
     };
 
     virtual ~FileWriter() = default;
@@ -70,7 +71,7 @@ public:
 
     virtual Status init() = 0;
 
-    virtual StatusOr<WriterAndStream> create(const std::string& path) const = 0;
+    virtual StatusOr<WriterAndStream> create(const std::string& path, const std::string& partition_name) const = 0;
 };
 
 class UnknownFileWriterFactory : public FileWriterFactory {
@@ -79,7 +80,7 @@ public:
 
     Status init() override { return Status::NotSupported(fmt::format("got unsupported file format: {}", _format)); }
 
-    StatusOr<WriterAndStream> create(const std::string& path) const override {
+    StatusOr<WriterAndStream> create(const std::string& path, const std::string& partition_name) const override {
         return Status::NotSupported(fmt::format("got unsupported file format: {}", _format));
     }
 

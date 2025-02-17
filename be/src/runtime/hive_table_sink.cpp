@@ -59,6 +59,9 @@ Status HiveTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operators
                                             pipeline::PipelineBuilderContext* context) const {
     auto runtime_state = context->runtime_state();
     auto fragment_ctx = context->fragment_context();
+    TableDescriptor* table_desc =
+            runtime_state->desc_tbl().get_table_descriptor(thrift_sink.hive_table_sink.target_table_id);
+    auto* hdfs_table_desc = down_cast<HdfsTableDescriptor*>(table_desc);
     auto output_exprs = this->get_output_expr();
     const auto& t_hive_sink = thrift_sink.hive_table_sink;
     const auto num_data_columns = t_hive_sink.data_column_names.size();
@@ -92,6 +95,18 @@ Status HiveTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operators
         }
     }
     sink_ctx->fragment_context = fragment_ctx;
+
+    {
+        sink_ctx->schema_scan_ctx.catalog = hdfs_table_desc->get_catalog_name();
+        sink_ctx->schema_scan_ctx.database = hdfs_table_desc->database();
+        sink_ctx->schema_scan_ctx.table = hdfs_table_desc->name();
+        sink_ctx->schema_scan_ctx.ip = t_hive_sink.ip;
+        sink_ctx->schema_scan_ctx.port = t_hive_sink.port;
+        sink_ctx->schema_scan_ctx.query_timeout_ms = runtime_state->query_options().query_timeout * 1000; // keep same with schema_scanner
+        if (t_hive_sink.is_static_partition_sink) {
+            sink_ctx->schema_scan_ctx.sink_partition_location = hdfs_table_desc->get_sink_partition_location();
+        }
+    }
 
     auto connector = connector::ConnectorManager::default_instance()->get(connector::Connector::HIVE);
     auto sink_provider = connector->create_data_sink_provider();

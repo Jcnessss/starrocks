@@ -68,7 +68,7 @@ public:
                       std::vector<std::string> column_names, std::vector<TypeDescriptor> type_descs,
                       std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                       TCompressionType::type compression_type, std::shared_ptr<ParquetWriterOptions> writer_options,
-                      const std::function<void()>& rollback_action);
+                      const std::function<void()>& rollback_action, std::string partition_name);
 
     ~ParquetFileWriter() override;
 
@@ -114,6 +114,7 @@ private:
     std::shared_ptr<::parquet::ParquetFileWriter> _writer;
     std::shared_ptr<parquet::ChunkWriter> _rowgroup_writer;
     const std::function<void()> _rollback_action;
+    const std::string _partition_name;
 };
 
 class ParquetFileWriterFactory : public FileWriterFactory {
@@ -122,11 +123,11 @@ public:
                              std::map<std::string, std::string> options, std::vector<std::string> column_names,
                              std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                              std::optional<std::vector<formats::FileColumnId>> field_ids, PriorityThreadPool* executors,
-                             RuntimeState* runtime_state);
+                             RuntimeState* runtime_state, FSOptions fs_options = {});
 
     Status init() override;
 
-    StatusOr<WriterAndStream> create(const std::string& path) const override;
+    StatusOr<WriterAndStream> create(const std::string& path, const std::string& partition_name) const override;
 
 private:
     std::shared_ptr<FileSystem> _fs;
@@ -139,6 +140,8 @@ private:
     std::vector<std::unique_ptr<ColumnEvaluator>> _column_evaluators;
     PriorityThreadPool* _executors = nullptr;
     RuntimeState* _runtime_state = nullptr;
+    mutable std::map<FileSystem::Type, std::shared_ptr<FileSystem>> _other_type_to_fs;
+    FSOptions _fs_options;
 };
 
 } // namespace starrocks::formats

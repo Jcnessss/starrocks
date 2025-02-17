@@ -110,8 +110,14 @@ public:
     static Status get_partitions_meta(const SchemaScannerState& state, const TGetPartitionsMetaRequest& var_params,
                                       TGetPartitionsMetaResponse* var_result);
 
+    static Status get_sink_partitions_meta(const SchemaScannerState& state, const TGetSinkPartitionsMetaRequest& var_params,
+                                      TGetPartitionsMetaResponse* var_result);
+
 private:
     static Status _call_rpc(const SchemaScannerState& state,
+                            std::function<void(ClientConnection<FrontendServiceClient>&)> callback);
+
+    static Status _call_rpc_without_timer(const SchemaScannerState& state,
                             std::function<void(ClientConnection<FrontendServiceClient>&)> callback);
 };
 

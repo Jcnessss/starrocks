@@ -566,6 +566,7 @@ struct THiveFileInfo {
     2: optional string partition_path
     4: optional i64 record_count
     5: optional i64 file_size_in_bytes
+    6: optional string partition_name
 }
 
 struct TSinkCommitInfo {

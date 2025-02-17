@@ -153,6 +153,7 @@ public:
     static void get_file_write_history(std::vector<FileWriteStat>* stats);
     static void on_file_write_open(WritableFile* file);
     static void on_file_write_close(WritableFile* file);
+    static Type parse_type(std::string_view uri);
 
     virtual Type type() const = 0;
 

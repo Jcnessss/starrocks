@@ -274,7 +274,10 @@ public class HiveCommitter {
                 remoteFilesCacheToRefresh.add(targetPath);
                 clearTasksForAbort.add(new DirectoryCleanUpTask(targetPath, false));
 
-                if (!pu.isS3Url()) {
+
+                boolean checkPathFsEqual = fileOps.checkPathFs(stagingDir, targetPath);
+                boolean targetS3 = pu.isS3Url();
+                if (checkPathFsEqual && !targetS3) {
                     fileOps.asyncRenameFiles(fsTaskFutures, fsTaskCancelled, writePath, targetPath, pu.getFileNames());
                 }
 
@@ -289,7 +292,10 @@ public class HiveCommitter {
         Path writePath = pu.getWritePath();
         Path targetPath = pu.getTargetPath();
 
-        if (pu.isS3Url()) {
+        boolean checkPathFsEqual = fileOps.checkPathFs(stagingDir, targetPath);
+        boolean targetS3 = pu.isS3Url();
+        if (targetS3 || !checkPathFsEqual) {
+            clearTasksForAbort.add(new DirectoryCleanUpTask(targetPath, false));
             String queryId = ConnectContext.get().getQueryId().toString();
             fileOps.removeNotCurrentQueryFiles(targetPath, queryId);
         } else {

@@ -33,6 +33,11 @@ Status SchemaHelper::_call_rpc(const SchemaScannerState& state,
     return ThriftRpcHelper::rpc<FrontendServiceClient>(state.ip, state.port, std::move(callback), state.timeout_ms);
 }
 
+Status SchemaHelper::_call_rpc_without_timer(const SchemaScannerState& state,
+                                             std::function<void(ClientConnection<FrontendServiceClient> &)> callback) {
+    return ThriftRpcHelper::rpc<FrontendServiceClient>(state.ip, state.port, std::move(callback), state.timeout_ms);
+}
+
 Status SchemaHelper::get_db_names(const SchemaScannerState& state, const TGetDbsParams& request,
                                   TGetDbsResult* result) {
     return _call_rpc(state,
@@ -212,6 +217,14 @@ Status SchemaHelper::get_partitions_meta(const SchemaScannerState& state, const 
         client->getPartitionsMeta(*var_result, var_params);
     });
 }
+
+Status SchemaHelper::get_sink_partitions_meta(const SchemaScannerState& state, const TGetSinkPartitionsMetaRequest& var_params,
+                                              TGetPartitionsMetaResponse* var_result) {
+    return _call_rpc_without_timer(state, [&var_params, &var_result](FrontendServiceConnection& client) {
+            client->getSinkPartitionsMeta(*var_result, var_params);
+    });
+}
+
 
 void fill_data_column_with_null(Column* data_column) {
     auto* nullable_column = down_cast<NullableColumn*>(data_column);

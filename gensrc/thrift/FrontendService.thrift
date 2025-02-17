@@ -1852,6 +1852,13 @@ struct TGetKeysResponse {
     1: optional list<binary> key_metas;
 }
 
+struct TGetSinkPartitionsMetaRequest {
+    1: required string catalog;
+    2: required string database;
+    3: required string table;
+    4: required list<string> partition_names;
+}
+
 service FrontendService {
     TGetDbsResult getDbNames(1:TGetDbsParams params)
     TGetTablesResult getTableNames(1:TGetTablesParams params)
@@ -1965,5 +1972,7 @@ service FrontendService {
     TGetTemporaryTablesInfoResponse getTemporaryTablesInfo(1: TGetTemporaryTablesInfoRequest request)
 
     TReportFragmentFinishResponse reportFragmentFinish(TReportFragmentFinishParams request)
+
+    TGetPartitionsMetaResponse getSinkPartitionsMeta(1: TGetSinkPartitionsMetaRequest request)
 }
 

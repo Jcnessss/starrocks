@@ -113,7 +113,7 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
                              std::vector<std::string> column_names, std::vector<TypeDescriptor> type_descs,
                              std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                              TCompressionType::type compression_type, std::shared_ptr<ORCWriterOptions> writer_options,
-                             std::function<void()> rollback_action)
+                             std::function<void()> rollback_action, std::string partition_name)
         : _location(std::move(location)),
           _output_stream(std::move(output_stream)),
           _column_names(std::move(column_names)),
@@ -121,7 +121,8 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
           _column_evaluators(std::move(column_evaluators)),
           _compression_type(compression_type),
           _writer_options(std::move(writer_options)),
-          _rollback_action(std::move(rollback_action)) {}
+          _rollback_action(std::move(rollback_action)),
+          _partition_name(std::move(partition_name)) {}
 
 Status ORCFileWriter::init() {
     RETURN_IF_ERROR(ColumnEvaluator::init(_column_evaluators));
@@ -152,7 +153,8 @@ Status ORCFileWriter::write(Chunk* chunk) {
 
 FileWriter::CommitResult ORCFileWriter::commit() {
     FileWriter::CommitResult result{
-            .io_status = Status::OK(), .format = ORC, .location = _location, .rollback_action = _rollback_action};
+            .io_status = Status::OK(), .format = ORC, .location = _location, .rollback_action = _rollback_action,
+            .partition_name = _partition_name};
     try {
         _writer->close();
     } catch (const std::exception& e) {
@@ -480,14 +482,15 @@ ORCFileWriterFactory::ORCFileWriterFactory(std::shared_ptr<FileSystem> fs, TComp
                                            std::map<std::string, std::string> options,
                                            std::vector<std::string> column_names,
                                            std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
-                                           PriorityThreadPool* executors, RuntimeState* runtime_state)
+                                           PriorityThreadPool* executors, RuntimeState* runtime_state, FSOptions fs_options)
         : _fs(std::move(fs)),
           _compression_type(compression_type),
           _options(std::move(options)),
           _column_names(std::move(column_names)),
           _column_evaluators(std::move(column_evaluators)),
           _executors(executors),
-          _runtime_state(runtime_state) {}
+          _runtime_state(runtime_state),
+          _fs_options(fs_options) {}
 
 Status ORCFileWriterFactory::init() {
     for (auto& e : _column_evaluators) {
@@ -497,9 +500,26 @@ Status ORCFileWriterFactory::init() {
     return Status::OK();
 }
 
-StatusOr<WriterAndStream> ORCFileWriterFactory::create(const string& path) const {
-    ASSIGN_OR_RETURN(auto file, _fs->new_writable_file(WritableFileOptions{.direct_write = true}, path));
-    auto rollback_action = [fs = _fs, path = path]() {
+StatusOr<WriterAndStream> ORCFileWriterFactory::create(const string& path, const string& partition_name) const {
+    std::shared_ptr<FileSystem> curr_fs;
+    auto type = FileSystem::parse_type(path);
+    if (type == _fs->type()) {
+        curr_fs = _fs;
+    } else {
+        auto it = _other_type_to_fs.find(type);
+        if (it != _other_type_to_fs.end()) {
+            curr_fs = it->second;
+        } else {
+            if (_fs_options.cloud_configuration == nullptr) {
+                return Status::InvalidArgument(fmt::format("need cloud config for create path {}", path));
+            }
+            _other_type_to_fs[type] = std::move(FileSystem::CreateUniqueFromString(path, _fs_options).value());
+            curr_fs = _other_type_to_fs[type];
+        }
+    }
+
+    ASSIGN_OR_RETURN(auto file, curr_fs->new_writable_file(WritableFileOptions{.direct_write = true}, path));
+    auto rollback_action = [fs = curr_fs, path = path]() {
         WARN_IF_ERROR(ignore_not_found(fs->delete_file(path)), "fail to delete file");
     };
     auto column_evaluators = ColumnEvaluator::clone(_column_evaluators);
@@ -509,7 +529,7 @@ StatusOr<WriterAndStream> ORCFileWriterFactory::create(const string& path) const
     auto orc_output_stream = std::make_shared<AsyncOrcOutputStream>(async_output_stream.get());
     auto writer =
             std::make_unique<ORCFileWriter>(path, orc_output_stream, _column_names, types, std::move(column_evaluators),
-                                            _compression_type, _parsed_options, rollback_action);
+                                            _compression_type, _parsed_options, rollback_action, partition_name);
     return WriterAndStream{
             .writer = std::move(writer),
             .stream = std::move(async_output_stream),

@@ -18,6 +18,7 @@
 
 #include <boost/thread/future.hpp>
 #include <future>
+#include <exec/schema_scanner.h>
 
 #include "column/chunk.h"
 #include "common/status.h"
@@ -47,6 +48,16 @@ public:
     void callback_on_commit(const CommitResult& result) override;
 };
 
+struct HiveChunkSinkSchemaScanContext {
+    std::string catalog;
+    std::string database;
+    std::string table;
+    std::string ip;
+    std::int32_t port;
+    std::int64_t query_timeout_ms;
+    std::string sink_partition_location;
+};
+
 struct HiveChunkSinkContext : public ConnectorChunkSinkContext {
     ~HiveChunkSinkContext() override = default;
 
@@ -62,6 +73,7 @@ struct HiveChunkSinkContext : public ConnectorChunkSinkContext {
     PriorityThreadPool* executor = nullptr;
     TCloudConfiguration cloud_conf;
     pipeline::FragmentContext* fragment_context = nullptr;
+    HiveChunkSinkSchemaScanContext schema_scan_ctx;
 };
 
 class HiveChunkSinkProvider : public ConnectorChunkSinkProvider {
@@ -70,6 +82,27 @@ public:
 
     StatusOr<std::unique_ptr<ConnectorChunkSink>> create_chunk_sink(std::shared_ptr<ConnectorChunkSinkContext> context,
                                                                     int32_t driver_id) override;
+};
+
+
+class HiveChunkSinkLocationProvider : public LocationProvider {
+public:
+    HiveChunkSinkLocationProvider(const std::string& base_path, const std::string& query_id, int be_number,
+        int driver_id, const std::string& file_suffix, const HiveChunkSinkSchemaScanContext& ctx)
+        : LocationProvider(base_path, query_id, be_number, driver_id, file_suffix) {
+        _schema_scan_ctx = ctx;
+    }
+
+    ~HiveChunkSinkLocationProvider() override = default;
+
+    std::string get(const std::string& partition) override;
+
+    StatusOr<std::string> get_partition_location(const std::string& partition);
+
+private:
+    HiveChunkSinkSchemaScanContext _schema_scan_ctx;
+    TGetPartitionsMetaResponse _partitions_meta_response;
+    std::map<std::string, std::string> _partition2location;
 };
 
 } // namespace starrocks::connector

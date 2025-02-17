@@ -51,6 +51,7 @@ import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.catalog.CatalogUtils;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.ListPartitionInfo;
 import com.starrocks.catalog.LocalTablet;
@@ -213,6 +214,7 @@ import com.starrocks.thrift.TGetQueryStatisticsResponse;
 import com.starrocks.thrift.TGetRoleEdgesRequest;
 import com.starrocks.thrift.TGetRoleEdgesResponse;
 import com.starrocks.thrift.TGetRoutineLoadJobsResult;
+import com.starrocks.thrift.TGetSinkPartitionsMetaRequest;
 import com.starrocks.thrift.TGetStreamLoadsResult;
 import com.starrocks.thrift.TGetTableMetaRequest;
 import com.starrocks.thrift.TGetTableMetaResponse;
@@ -271,6 +273,7 @@ import com.starrocks.thrift.TObjectDependencyRes;
 import com.starrocks.thrift.TOlapTableIndexTablets;
 import com.starrocks.thrift.TOlapTablePartition;
 import com.starrocks.thrift.TOlapTablePartitionParam;
+import com.starrocks.thrift.TPartitionMetaInfo;
 import com.starrocks.thrift.TQueryStatisticsInfo;
 import com.starrocks.thrift.TRefreshTableRequest;
 import com.starrocks.thrift.TRefreshTableResponse;
@@ -2877,5 +2880,38 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TReportFragmentFinishResponse reportFragmentFinish(TReportFragmentFinishParams request) throws TException {
         return QeProcessorImpl.INSTANCE.reportFragmentFinish(request);
+    }
+
+    @Override
+    public TGetPartitionsMetaResponse getSinkPartitionsMeta(TGetSinkPartitionsMetaRequest request) throws TException {
+        try {
+            MetadataMgr mgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
+            Table table = mgr.getTable(request.catalog, request.database, request.table);
+            if (table instanceof HiveTable) {
+                TGetPartitionsMetaResponse resp = new TGetPartitionsMetaResponse();
+                List<TPartitionMetaInfo> pList = new ArrayList<>();
+
+                HiveTable hiveTable = (HiveTable) table;
+                String partitionName = request.partition_names.get(0);
+                boolean partitionExists = mgr.partitionExists(request.catalog, hiveTable, partitionName);
+                if (partitionExists) {
+                    List<com.starrocks.connector.PartitionInfo> partitionInfos =
+                            mgr.getPartitions(request.catalog, table, List.of(partitionName));
+                    Preconditions.checkArgument(partitionInfos.size() == 1);
+                    com.starrocks.connector.hive.Partition partition =
+                            (com.starrocks.connector.hive.Partition) partitionInfos.get(0);
+                    TPartitionMetaInfo partitionMetaInfo = new TPartitionMetaInfo();
+                    partitionMetaInfo.setStorage_path(partition.getFullPath());
+                    pList.add(partitionMetaInfo);
+                }
+
+                resp.partitions_meta_infos = pList;
+                return resp;
+            } else {
+                throw new TException("Only Support HiveTable");
+            }
+        } catch (Exception e) {
+            throw new TException(e);
+        }
     }
 }

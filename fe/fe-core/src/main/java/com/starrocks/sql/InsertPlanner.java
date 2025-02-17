@@ -48,6 +48,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
+import com.starrocks.connector.PartitionInfo;
 import com.starrocks.planner.BlackHoleTableSink;
 import com.starrocks.planner.DataSink;
 import com.starrocks.planner.HiveTableSink;
@@ -410,6 +411,9 @@ public class InsertPlanner {
                 dataSink = new IcebergTableSink((IcebergTable) targetTable, tupleDesc,
                         isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable());
             } else if (targetTable instanceof HiveTable) {
+                // Do partition prune for hive table sink to decrease partition meta in rpc
+                doPartitionPruneForHiveSink(insertStmt);
+                descriptorTable.addReferencedTable(targetTable);
                 dataSink = new HiveTableSink((HiveTable) targetTable, tupleDesc,
                         isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable(), insertStmt);
             } else if (targetTable instanceof TableFunctionTable) {
@@ -1026,4 +1030,38 @@ public class InsertPlanner {
         }
         return true;
     }
+
+    private void doPartitionPruneForHiveSink(InsertStmt insertStatement) {
+        HiveTable targetTable = (HiveTable) insertStatement.getTargetTable();
+
+        List<Optional<String>> partitionValues = Lists.newArrayList();
+        if (insertStatement.isSpecifyKeyPartition()) {
+            List<String> partitionColNames = insertStatement.getTargetPartitionNames().getPartitionColNames();
+            List<Expr> partitionColValues = insertStatement.getTargetPartitionNames().getPartitionColValues();
+            List<String> tablePartitionColumnNames = targetTable.getPartitionColumnNames();
+            for (Column column : targetTable.getFullSchema()) {
+                String columnName = column.getName();
+                if (tablePartitionColumnNames.contains(columnName)) {
+                    int index = partitionColNames.indexOf(columnName);
+                    LiteralExpr expr = (LiteralExpr) partitionColValues.get(index);
+                    Type type = expr.isConstantNull() ? Type.NULL : column.getType();
+                    ConstantOperator op = ConstantOperator.createObject(expr.getRealObjectValue(), type);
+                    partitionValues.add(Optional.ofNullable(op.toString()));
+                }
+            }
+            List<String> partitionNames;
+            try {
+                partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                        .listPartitionNamesByValue(targetTable.getCatalogName(), targetTable.getDbName(),
+                                targetTable.getTableName(), partitionValues);
+                List<PartitionInfo> partitions = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                        .getPartitions(targetTable.getCatalogName(), targetTable, partitionNames);
+
+                targetTable.setSinkPartitions(partitions.get(0));
+            } catch (Exception ignored) {
+
+            }
+        }
+    }
+
 }

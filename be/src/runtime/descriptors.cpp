@@ -179,6 +179,11 @@ HdfsTableDescriptor::HdfsTableDescriptor(const TTableDescriptor& tdesc, ObjectPo
     _serde_lib = tdesc.hdfsTable.serde_lib;
     _serde_properties = tdesc.hdfsTable.serde_properties;
     _time_zone = tdesc.hdfsTable.time_zone;
+    _catalog_name = tdesc.catalogName;
+    if (tdesc.hdfsTable.__isset.sink_partition_location) {
+        _sink_partition_location = tdesc.hdfsTable.sink_partition_location;
+    }
+
 }
 
 const std::string& HdfsTableDescriptor::get_hive_column_names() const {
@@ -203,6 +208,14 @@ const std::map<std::string, std::string> HdfsTableDescriptor::get_serde_properti
 
 const std::string& HdfsTableDescriptor::get_time_zone() const {
     return _time_zone;
+}
+
+const std::string& HdfsTableDescriptor::get_catalog_name() const {
+    return _catalog_name;
+}
+
+const std::string& HdfsTableDescriptor::get_sink_partition_location() const {
+    return _sink_partition_location;
 }
 
 FileTableDescriptor::FileTableDescriptor(const TTableDescriptor& tdesc, ObjectPool* pool)

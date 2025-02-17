@@ -51,6 +51,7 @@ import com.starrocks.common.Config;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
+import com.starrocks.connector.PartitionInfo;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveStorageFormat;
@@ -150,6 +151,8 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
     private HiveTableType hiveTableType = HiveTableType.MANAGED_TABLE;
 
     private HiveStorageFormat storageFormat;
+
+    private PartitionInfo sinkPartitions;
 
     public HiveTable() {
         super(TableType.HIVE);
@@ -338,6 +341,10 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         }
     }
 
+    public void setSinkPartitions(PartitionInfo sinkPartitions) {
+        this.sinkPartitions = sinkPartitions;
+    }
+
     @Override
     public TTableDescriptor toThrift(List<ReferencedPartitionInfo> partitions) {
         Preconditions.checkNotNull(partitions);
@@ -380,7 +387,7 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
             return null;
         }
 
-        for (int i = 0; i < hivePartitions.size(); i++) {
+        for (int i = 0; !partitions.isEmpty() && i < hivePartitions.size(); i++) {
             ReferencedPartitionInfo info = partitions.get(i);
             PartitionKey key = info.getKey();
             long partitionId = info.getId();
@@ -397,7 +404,6 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
             tPartition.setLocation(tPartitionLocation);
             tHdfsTable.putToPartitions(partitionId, tPartition);
         }
-
         tHdfsTable.setSerde_lib(hiveProperties.get(HIVE_TABLE_SERDE_LIB));
         tHdfsTable.setInput_format(hiveProperties.get(HIVE_TABLE_INPUT_FORMAT));
         tHdfsTable.setHive_column_names(hiveProperties.get(HIVE_TABLE_COLUMN_NAMES));
@@ -405,9 +411,16 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         tHdfsTable.setSerde_properties(serdeProperties);
         tHdfsTable.setTime_zone(TimeUtils.getSessionTimeZone());
 
+        if (sinkPartitions != null) {
+            com.starrocks.connector.hive.Partition partition = (com.starrocks.connector.hive.Partition) sinkPartitions;
+            String full = partition.getFullPath();
+            tHdfsTable.setSink_partition_location(full);
+        }
+
         TTableDescriptor tTableDescriptor = new TTableDescriptor(id, TTableType.HDFS_TABLE, fullSchema.size(),
                 0, hiveTableName, hiveDbName);
         tTableDescriptor.setHdfsTable(tHdfsTable);
+        tTableDescriptor.setCatalogName(this.getCatalogName());
         return tTableDescriptor;
     }
 

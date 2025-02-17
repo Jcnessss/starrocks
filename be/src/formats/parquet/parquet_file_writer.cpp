@@ -62,7 +62,8 @@ Status ParquetFileWriter::write(Chunk* chunk) {
 
 FileWriter::CommitResult ParquetFileWriter::commit() {
     FileWriter::CommitResult result{
-            .io_status = Status::OK(), .format = PARQUET, .location = _location, .rollback_action = _rollback_action};
+            .io_status = Status::OK(), .format = PARQUET, .location = _location, .rollback_action = _rollback_action,
+            .partition_name = _partition_name};
     try {
         _writer->Close();
     } catch (const ::parquet::ParquetStatusException& e) {
@@ -218,7 +219,7 @@ ParquetFileWriter::ParquetFileWriter(std::string location, std::shared_ptr<arrow
                                      std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                                      TCompressionType::type compression_type,
                                      std::shared_ptr<ParquetWriterOptions> writer_options,
-                                     const std::function<void()>& rollback_action)
+                                     const std::function<void()>& rollback_action, std::string partition_name)
         : _location(std::move(location)),
           _output_stream(std::move(output_stream)),
           _column_names(std::move(column_names)),
@@ -226,7 +227,8 @@ ParquetFileWriter::ParquetFileWriter(std::string location, std::shared_ptr<arrow
           _column_evaluators(std::move(column_evaluators)),
           _compression_type(compression_type),
           _writer_options(std::move(writer_options)),
-          _rollback_action(std::move(rollback_action)) {}
+          _rollback_action(std::move(rollback_action)),
+          _partition_name(std::move(partition_name)) {}
 
 StatusOr<::parquet::Compression::type> ParquetFileWriter::_convert_compression_type(TCompressionType::type type) {
     ::parquet::Compression::type converted_type;
@@ -453,7 +455,8 @@ ParquetFileWriterFactory::ParquetFileWriterFactory(std::shared_ptr<FileSystem> f
                                                    std::vector<std::string> column_names,
                                                    std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                                                    std::optional<std::vector<formats::FileColumnId>> field_ids,
-                                                   PriorityThreadPool* executors, RuntimeState* runtime_state)
+                                                   PriorityThreadPool* executors, RuntimeState* runtime_state,
+                                                   FSOptions fs_options)
         : _fs(std::move(fs)),
           _compression_type(compression_type),
           _field_ids(std::move(field_ids)),
@@ -461,7 +464,8 @@ ParquetFileWriterFactory::ParquetFileWriterFactory(std::shared_ptr<FileSystem> f
           _column_names(std::move(column_names)),
           _column_evaluators(std::move(column_evaluators)),
           _executors(executors),
-          _runtime_state(runtime_state) {}
+          _runtime_state(runtime_state),
+          _fs_options(fs_options) {}
 
 Status ParquetFileWriterFactory::init() {
     RETURN_IF_ERROR(ColumnEvaluator::init(_column_evaluators));
@@ -481,9 +485,26 @@ Status ParquetFileWriterFactory::init() {
     return Status::OK();
 }
 
-StatusOr<WriterAndStream> ParquetFileWriterFactory::create(const std::string& path) const {
-    ASSIGN_OR_RETURN(auto file, _fs->new_writable_file(WritableFileOptions{.direct_write = true}, path));
-    auto rollback_action = [fs = _fs, path = path]() {
+StatusOr<WriterAndStream> ParquetFileWriterFactory::create(const std::string& path, const std::string& partition_name) const {
+    std::shared_ptr<FileSystem> curr_fs;
+    auto type = FileSystem::parse_type(path);
+    if (type == _fs->type()) {
+        curr_fs = _fs;
+    } else {
+        auto it = _other_type_to_fs.find(type);
+        if (it != _other_type_to_fs.end()) {
+            curr_fs = it->second;
+        } else {
+            if (_fs_options.cloud_configuration == nullptr) {
+                return Status::InvalidArgument(fmt::format("need cloud config for create path {}", path));
+            }
+            _other_type_to_fs[type] = std::move(FileSystem::CreateUniqueFromString(path, _fs_options).value());
+            curr_fs = _other_type_to_fs[type];
+        }
+    }
+
+    ASSIGN_OR_RETURN(auto file, curr_fs->new_writable_file(WritableFileOptions{.direct_write = true}, path));
+    auto rollback_action = [fs = curr_fs, path = path]() {
         WARN_IF_ERROR(ignore_not_found(fs->delete_file(path)), "fail to delete file");
     };
     auto column_evaluators = ColumnEvaluator::clone(_column_evaluators);
@@ -493,7 +514,7 @@ StatusOr<WriterAndStream> ParquetFileWriterFactory::create(const std::string& pa
     auto parquet_output_stream = std::make_shared<parquet::AsyncParquetOutputStream>(async_output_stream.get());
     auto writer = std::make_unique<ParquetFileWriter>(path, parquet_output_stream, _column_names, types,
                                                       std::move(column_evaluators), _compression_type, _parsed_options,
-                                                      rollback_action);
+                                                      rollback_action, partition_name);
     return WriterAndStream{
             .writer = std::move(writer),
             .stream = std::move(async_output_stream),

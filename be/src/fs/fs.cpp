@@ -181,4 +181,25 @@ void FileSystem::on_file_write_close(WritableFile* file) {
     }
 }
 
+FileSystem::Type FileSystem::parse_type(std::string_view uri) {
+    if (fs::is_fallback_to_hadoop_fs(uri)) {
+        return HDFS;
+    }
+    if (fs::is_posix_uri(uri)) {
+        return POSIX;
+    }
+    if (fs::is_s3_uri(uri)) {
+        return S3;
+    }
+    if (fs::is_azure_uri(uri) || fs::is_gcs_uri(uri)) {
+        return HDFS;
+    }
+#ifdef USE_STAROS
+    if (is_starlet_uri(uri)) {
+        return STARLET;
+    }
+#endif
+    return HDFS;
+}
+
 } // namespace starrocks

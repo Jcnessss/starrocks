@@ -54,6 +54,7 @@ import com.starrocks.sql.ast.CreateViewStmt;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.MsckRepairTableStmt;
 import com.starrocks.sql.ast.SingleItemListPartitionDesc;
+import com.starrocks.sql.ast.TableRenameClause;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -359,6 +360,12 @@ public class HiveMetadata implements ConnectorMetadata {
     }
 
     @Override
+    public boolean partitionExists(Table table, String partitionName) {
+        List<String> partitionValues = PartitionUtil.toPartitionValues(partitionName);
+        return hmsOps.partitionExists(table, partitionValues);
+    }
+
+    @Override
     public Statistics getTableStatistics(OptimizerContext session,
                                          Table table,
                                          Map<ColumnRefOperator, Column> columns,
@@ -438,6 +445,8 @@ public class HiveMetadata implements ConnectorMetadata {
                         partitionColNames.size(), partitionValues.size());
                 if (hmsOps.partitionExists(table, partitionValues)) {
                     mode = isOverwrite ? UpdateMode.OVERWRITE : UpdateMode.APPEND;
+                    Partition partition = hmsOps.getPartition(table.getDbName(), tableName, partitionValues);
+                    partitionUpdate.updateTargetPathFromMeta(new Path(partition.getFullPath()));
                 } else {
                     mode = PartitionUpdate.UpdateMode.NEW;
                 }
@@ -488,6 +497,8 @@ public class HiveMetadata implements ConnectorMetadata {
         for (AlterClause alterClause : alterClauses) {
             if (alterClause instanceof AddPartitionClause) {
                 addPartition(stmt, alterClause);
+            } else if (alterClause instanceof TableRenameClause) {
+                hmsOps.alterTable(stmt);
             } else {
                 throw new StarRocksConnectorException("This connector doesn't support alter table type: %s",
                         alterClause.getOpType());

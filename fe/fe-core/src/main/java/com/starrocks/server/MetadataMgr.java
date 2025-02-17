@@ -808,6 +808,20 @@ public class MetadataMgr {
         return partitions.build();
     }
 
+    public boolean partitionExists(String catalogName, Table table, String partitionName) {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        if (connectorMetadata.isPresent()) {
+            try {
+                return connectorMetadata.get().partitionExists(table, partitionName);
+            } catch (Exception e) {
+                LOG.error("Failed to check partition exists catalog [{}], table [{}]", catalogName, table, e);
+                throw e;
+            }
+        } else {
+            return false;
+        }
+    }
+
     public SerializedMetaSpec getSerializedMetaSpec(String catalogName, String dbName, String tableName,
                                                     long snapshotId, String serializedPredicate) {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);

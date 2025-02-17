@@ -181,6 +181,11 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
+    public boolean partitionExists(Table table, String partitionName) {
+        return normal.partitionExists(table, partitionName);
+    }
+
+    @Override
     public Statistics getTableStatistics(OptimizerContext session, Table table, Map<ColumnRefOperator, Column> columns,
                                          List<PartitionKey> partitionKeys, ScalarOperator predicate, long limit) {
         return normal.getTableStatistics(session, table, columns, partitionKeys, predicate, limit);

@@ -227,6 +227,8 @@ public:
     const std::string& get_serde_lib() const;
     const std::map<std::string, std::string> get_serde_properties() const;
     const std::string& get_time_zone() const;
+    const std::string& get_catalog_name() const;
+    const std::string& get_sink_partition_location() const;
 
 private:
     std::string _serde_lib;
@@ -235,6 +237,8 @@ private:
     std::string _hive_column_types;
     std::map<std::string, std::string> _serde_properties;
     std::string _time_zone;
+    std::string _catalog_name;
+    std::string _sink_partition_location;
 };
 
 class IcebergTableDescriptor : public HiveTableDescriptor {

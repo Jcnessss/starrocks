@@ -320,6 +320,10 @@ public class HiveMetastoreOperations {
         return metastore.getPartitionsByNames(dbName, tblName, partitionNames);
     }
 
+    public Map<String, Partition> getPartitionByNames(String dbName, String tblName, List<String> partitionNames) {
+        return metastore.getPartitionsByNames(dbName, tblName, partitionNames);
+    }
+
     public HivePartitionStats getTableStatistics(String dbName, String tblName) {
         return metastore.getTableStatistics(dbName, tblName);
     }

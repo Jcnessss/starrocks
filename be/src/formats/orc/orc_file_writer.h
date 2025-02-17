@@ -73,7 +73,7 @@ public:
                   std::vector<std::string> column_names, std::vector<TypeDescriptor> type_descs,
                   std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                   TCompressionType::type compression_type, std::shared_ptr<ORCWriterOptions> writer_options,
-                  std::function<void()> rollback_action);
+                  std::function<void()> rollback_action, std::string partition_name);
 
     ~ORCFileWriter() override = default;
 
@@ -128,6 +128,7 @@ private:
     std::shared_ptr<ORCWriterOptions> _writer_options;
     int64_t _row_counter{0};
     std::function<void()> _rollback_action;
+    const std::string _partition_name;
 };
 
 class ORCFileWriterFactory : public FileWriterFactory {
@@ -135,11 +136,11 @@ public:
     ORCFileWriterFactory(std::shared_ptr<FileSystem> fs, TCompressionType::type compression_type,
                          std::map<std::string, std::string> options, std::vector<std::string> column_names,
                          std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
-                         PriorityThreadPool* executors, RuntimeState* runtime_state);
+                         PriorityThreadPool* executors, RuntimeState* runtime_state, FSOptions fs_options = {});
 
     Status init() override;
 
-    StatusOr<WriterAndStream> create(const std::string& path) const override;
+    StatusOr<WriterAndStream> create(const std::string& path, const std::string& partition_name) const override;
 
 private:
     std::shared_ptr<FileSystem> _fs;
@@ -151,6 +152,8 @@ private:
     std::vector<std::unique_ptr<ColumnEvaluator>> _column_evaluators;
     PriorityThreadPool* _executors = nullptr;
     RuntimeState* _runtime_state = nullptr;
+    mutable std::map<FileSystem::Type, std::shared_ptr<FileSystem>> _other_type_to_fs;
+    FSOptions _fs_options;
 };
 
 } // namespace starrocks::formats

@@ -17,6 +17,7 @@ package com.starrocks.planner;
 import com.google.common.base.Preconditions;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.common.Config;
 import com.starrocks.common.util.CompressionUtils;
 import com.starrocks.connector.Connector;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -26,6 +27,7 @@ import com.starrocks.connector.hive.TextFileFormatDesc;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.service.FrontendOptions;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.thrift.TCloudConfiguration;
@@ -54,6 +56,9 @@ public class HiveTableSink extends DataSink {
     private final boolean isStaticPartitionSink;
     private final String tableIdentifier;
     private final CloudConfiguration cloudConfiguration;
+    private final long tableId;
+    private final String ip;
+    private final int port;
 
     public HiveTableSink(HiveTable hiveTable, TupleDescriptor desc, boolean isStaticPartitionSink,
                          SessionVariable sessionVariable, InsertStmt insertStmt) {
@@ -89,6 +94,10 @@ public class HiveTableSink extends DataSink {
 
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalogName));
+
+        this.tableId = hiveTable.getId();
+        this.ip = FrontendOptions.getLocalHostAddress();
+        this.port = Config.rpc_port;
     }
 
     @Override
@@ -118,6 +127,9 @@ public class HiveTableSink extends DataSink {
         TCloudConfiguration tCloudConfiguration = new TCloudConfiguration();
         cloudConfiguration.toThrift(tCloudConfiguration);
         tHiveTableSink.setCloud_configuration(tCloudConfiguration);
+        tHiveTableSink.setTarget_table_id(tableId);
+        tHiveTableSink.setIp(ip);
+        tHiveTableSink.setPort(port);
         tDataSink.setHive_table_sink(tHiveTableSink);
 
         return tDataSink;

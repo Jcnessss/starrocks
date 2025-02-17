@@ -212,6 +212,9 @@ public class RemoteFileOperations {
         for (String fileName : fileNames) {
             Path source = new Path(writePath, fileName);
             Path target = new Path(targetPath, fileName);
+            if (source.equals(target)) {
+                continue;
+            }
             renameFileFutures.add(CompletableFuture.runAsync(() -> {
                 if (cancelled.get()) {
                     return;
@@ -304,6 +307,16 @@ public class RemoteFileOperations {
         } catch (Exception e) {
             LOG.error("Failed to get file status for paths: {}", paths, e);
             throw new StarRocksConnectorException("Failed to get file status for paths: %s. msg: %s", paths, e.getMessage());
+        }
+    }
+
+    public boolean checkPathFs(Path staging, Path target) {
+        try {
+            FileSystem stagingFs = FileSystem.get(staging.toUri(), conf);
+            FileSystem targetFs = FileSystem.get(target.toUri(), conf);
+            return stagingFs == targetFs;
+        } catch (IOException e) {
+            throw new StarRocksConnectorException("Failed to check staging && target path %s", staging, target);
         }
     }
 }

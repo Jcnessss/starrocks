@@ -32,7 +32,7 @@ public class PartitionUpdate {
     private final String name;
     private UpdateMode updateMode;
     private final Path writePath;
-    private final Path targetPath;
+    private Path targetPath;
     private final List<String> fileNames;
     private final long rowCount;
     private final long totalSizeInBytes;
@@ -85,6 +85,11 @@ public class PartitionUpdate {
         return this;
     }
 
+    public PartitionUpdate updateTargetPathFromMeta(Path targetPath) {
+        this.targetPath = targetPath;
+        return this;
+    }
+
     public PartitionUpdate setDeleteData(boolean deleteData) {
         this.deleteData = deleteData;
         return this;
@@ -104,14 +109,16 @@ public class PartitionUpdate {
     public static PartitionUpdate get(THiveFileInfo fileInfo, String stagingDir, String tableLocation) {
         Preconditions.checkState(fileInfo.isSetPartition_path() && !Strings.isNullOrEmpty(fileInfo.getPartition_path()),
                 "Missing partition path");
+        String partitionName;
+        if (fileInfo.getPartition_name().equals("__DEFAULT_PARTITION__")) {
+            partitionName = PartitionUtil.getPartitionName(stagingDir, fileInfo.getPartition_path());
+        } else {
+            partitionName = fileInfo.getPartition_name();
+        }
 
-        String partitionName = PartitionUtil.getPartitionName(stagingDir, fileInfo.getPartition_path());
-
+        String writePath = getPathWithSlash(fileInfo.getPartition_path());
         String tableLocationWithSlash = getPathWithSlash(tableLocation);
-        String stagingDirWithSlash = getPathWithSlash(stagingDir);
-
-        String writePath = stagingDirWithSlash + partitionName + "/";
-        String targetPath = tableLocationWithSlash + partitionName + "/";
+        String targetPath = tableLocationWithSlash + partitionName + "/"; // only for new partition
 
         return new PartitionUpdate(partitionName, new Path(writePath), new Path(targetPath),
                 Lists.newArrayList(fileInfo.getFile_name()), fileInfo.getRecord_count(), fileInfo.getFile_size_in_bytes());

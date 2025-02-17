@@ -260,6 +260,10 @@ struct THiveTableSink {
     7: optional CloudConfiguration.TCloudConfiguration cloud_configuration
     8: optional i64 target_max_file_size
     9: optional Descriptors.TTextFileDesc text_file_desc // for textfile format
+    // for be schema scan fe
+    10: optional i64 target_table_id
+    11: optional string ip // frontend ip
+    12: optional i32 port  // frontend thrift server port
 }
 
 struct TTableFunctionTableSink {
