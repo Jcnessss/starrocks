@@ -368,4 +368,10 @@ public class HiveMetastore implements IHiveMetastore {
     public void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable) {
         client.alterTable(dbName, tableName, newTable);
     }
+
+    @Override
+    public Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues) {
+        return client.getPartitionsVersion(dbName, tableName, partitionValues);
+    }
+
 }

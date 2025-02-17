@@ -2348,6 +2348,22 @@ public class DLFProxyMetaStoreClient implements IMetaStoreClient {
     }
 
     @Override
+    public long getTableVersion(String s, String s1) throws NoSuchObjectException, MetaException, TException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<String, Long> getPartitionsVersion(String s, String s1, List<String> list)
+            throws NoSuchObjectException, MetaException, TException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long getPartitionListVersion(String s, String s1) throws NoSuchObjectException, MetaException, TException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public ShowCompactResponse showCompactions() throws TException {
         return call(this.readWriteClient, client -> client.showCompactions(), "showCompactions");
     }

@@ -106,4 +106,6 @@ public interface IHiveMetastore extends IMetastore {
     void alterTable(String dbName, String tableName, Table newTable);
 
     void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable);
+
+    public Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues);
 }

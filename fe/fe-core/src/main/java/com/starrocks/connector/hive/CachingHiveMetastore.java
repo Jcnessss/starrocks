@@ -271,7 +271,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     }
 
     public Partition getPartition(String dbName, String tblName, List<String> partitionValues) {
-        return get(partitionCache, HivePartitionName.of(dbName, tblName, partitionValues));
+        return loadPartition(HivePartitionName.of(dbName, tblName, partitionValues));
     }
 
     public Partition loadPartition(HivePartitionName key) {
@@ -313,9 +313,21 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                         "partition name is missing"))
                 .collect(Collectors.toList());
 
-        Map<HivePartitionName, Partition> all = getAll(partitionCache, hivePartitionNames);
+
+        Map<HivePartitionName, Partition> allPresent = getAllPresent(partitionCache, hivePartitionNames);
+        if (allPresent.size() != 0) {
+            List<String> hitPartitionNames = allPresent.keySet().stream().map(x -> x.getPartitionNames().get())
+                    .collect(Collectors.toList());
+            Map<String, Long> versions = metastore.getPartitionsVersion(dbName, tblName, hitPartitionNames);
+
+            allPresent.entrySet().stream().filter(entry -> entry.getValue().getPartitionVersion() <
+                            versions.get(entry.getKey().getPartitionNames().get()))
+                    .forEach(entry -> invalidatePartition(entry.getKey()));
+        }
+
+        Map<HivePartitionName, Partition> res = getAll(partitionCache, hivePartitionNames);
         ImmutableMap.Builder<String, Partition> partitionsByName = ImmutableMap.builder();
-        for (Map.Entry<HivePartitionName, Partition> entry : all.entrySet()) {
+        for (Map.Entry<HivePartitionName, Partition> entry : res.entrySet()) {
             Optional<String> optPartitionNames = entry.getKey().getPartitionNames();
             Preconditions.checkState(optPartitionNames.isPresent());
             partitionsByName.put(optPartitionNames.get(), entry.getValue());
@@ -603,6 +615,17 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         }
     }
 
+    private static <K, V> Map<K, V> getAllPresent(LoadingCache<K, V> cache, Iterable<K> keys) {
+        try {
+            return cache.getAllPresent(keys);
+        } catch (UncheckedExecutionException e) {
+            LOG.error("Error occurred when loading cache", e);
+            throwIfInstanceOf(e.getCause(), StarRocksConnectorException.class);
+            throwIfUnchecked(e);
+            throw new UncheckedExecutionException(e);
+        }
+    }
+
     private List<HivePartitionName> getPresentPartitionNames(LoadingCache<HivePartitionName, ?> cache,
                                                              String dbName, String tableName) {
         return cache.asMap().keySet().stream()
@@ -732,5 +755,10 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             invalidateTable(dbName, tableName);
             invalidateTable(newTable.getDbName(), newTable.getTableName());
         }
+    }
+
+    @Override
+    public Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues) {
+        return metastore.getPartitionsVersion(dbName, tableName, partitionValues);
     }
 }

@@ -677,6 +677,27 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
     }
 
     @Override
+    public long getTableVersion(String databaseName, String tableName)
+            throws TException
+    {
+        return client.get_table_version(databaseName, tableName);
+    }
+
+    @Override
+    public Map<String, Long> getPartitionsVersion(String databaseName, String tableName, List<String> partitionValues)
+            throws TException
+    {
+        return client.get_partitions_version(databaseName, tableName, partitionValues);
+    }
+
+    @Override
+    public long getPartitionListVersion(String databaseName, String tableName)
+            throws TException
+    {
+        return client.get_partition_list_version(databaseName, tableName);
+    }
+
+    @Override
     public List<String> listPartitionNames(String dbName, String tblName, short maxParts)
             throws NoSuchObjectException, MetaException, TException {
         return listPartitionNames(null, dbName, tblName, maxParts);

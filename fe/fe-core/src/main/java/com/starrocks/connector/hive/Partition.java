@@ -52,6 +52,15 @@ public class Partition implements PartitionInfo {
         return parameters;
     }
 
+    public Long getPartitionVersion() {
+        String lastDdlTime = parameters.get("transient_lastDdlMillis");
+        if (lastDdlTime == null) {
+            return -1L;
+        } else {
+            return Long.parseLong(lastDdlTime);
+        }
+    }
+
     public RemoteFileInputFormat getInputFormat() {
         return inputFormat;
     }
