@@ -21,7 +21,7 @@ public class StatisticsEstimateCoefficient {
     // Group by columns correlation in estimate aggregates row count
     public static final double UNKNOWN_GROUP_BY_CORRELATION_COEFFICIENT = 0.75;
     // estimate aggregates row count with default group by columns statistics
-    public static final double DEFAULT_GROUP_BY_CORRELATION_COEFFICIENT = 0.5;
+    public static final double DEFAULT_GROUP_BY_CORRELATION_COEFFICIENT = 0.2;
     // expand estimate aggregates row count with default group by columns statistics
     public static final double DEFAULT_GROUP_BY_EXPAND_COEFFICIENT = 1.05;
     // IN predicate default filter rate

@@ -146,7 +146,7 @@ public class CostModel {
             for (int i = 0; i < context.getChildrenStatistics().size(); i++) {
                 totalSize += context.getChildStatistics(i).getComputeSize();
             }
-            return CostEstimate.of(statistics.getComputeSize(), totalSize, 0);
+            return CostEstimate.of(statistics.getComputeSize() + totalSize, totalSize, totalSize);
         }
 
         private CostEstimate adjustCostForMV(ExpressionContext context) {

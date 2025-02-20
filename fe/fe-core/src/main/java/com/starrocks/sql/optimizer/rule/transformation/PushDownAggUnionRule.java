@@ -22,6 +22,7 @@ import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.Operator;
 import com.starrocks.sql.optimizer.operator.OperatorType;
+import com.starrocks.sql.optimizer.operator.Projection;
 import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalUnionOperator;
 import com.starrocks.sql.optimizer.operator.pattern.Pattern;
@@ -35,11 +36,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.starrocks.sql.optimizer.operator.AggType.LOCAL;
 
 public class PushDownAggUnionRule extends TransformationRule {
-
 
     private static final PushDownAggUnionRule INSTANCE = new PushDownAggUnionRule();
 
@@ -70,6 +71,65 @@ public class PushDownAggUnionRule extends TransformationRule {
         LogicalUnionOperator union = (LogicalUnionOperator) input.inputAt(0).getOp();
         List<OptExpression> aggs = new ArrayList<>();
         List<List<ColumnRefOperator>> unionInputs = new ArrayList<>();
+        List<OptExpression> leaves = new ArrayList<>();
+
+        // Refactor leaf nodes, push down the projection of union operator.
+        if (union.getProjection() != null) {
+            for (int i = 0; i < union.getChildOutputColumns().size(); i++) {
+                int finalIndex = i;
+                Operator child = input.inputAt(0).inputAt(i).getOp();
+                ScalarOperatorVisitor<ScalarOperator, Void> visitor = new ScalarOperatorVisitor<ScalarOperator, Void>() {
+                    @Override
+                    public ScalarOperator visit(ScalarOperator scalarOperator, Void context) {
+                        List<ScalarOperator> children = Lists.newArrayList(scalarOperator.getChildren());
+                        for (int i = 0; i < children.size(); ++i) {
+                            scalarOperator.setChild(i, scalarOperator.getChild(i).accept(this, null));
+                        }
+                        return scalarOperator;
+                    }
+
+                    @Override
+                    public ScalarOperator visitVariableReference(ColumnRefOperator columnRefOperator, Void context) {
+                        int index = union.getOutputColumnRefOp().indexOf(columnRefOperator);
+                        if (index == -1) {
+                            return columnRefOperator;
+                        }
+                        ColumnRefOperator childInput = union.getChildOutputColumns().get(finalIndex).get(index);
+                        if (child.getProjection() == null) {
+                            return childInput;
+                        }
+                        ScalarOperator scanProject = child.getProjection().getColumnRefMap().get(childInput);
+                        if (scanProject == null) {
+                            ScalarOperator commonSubOperator = child.getProjection().getCommonSubOperatorMap().get(childInput);
+                            if (commonSubOperator != null) {
+                                return commonSubOperator;
+                            }
+                            return columnRefOperator;
+                        }
+                        return scanProject;
+                    }
+                };
+
+                // The visitor might change the projection, so clone it first.
+                Projection tempProject = union.getProjection().clone();
+                Map<ColumnRefOperator, ScalarOperator> newColumnRefMap =
+                        tempProject.getColumnRefMap().entrySet().stream().collect(Collectors.toMap(
+                                entry -> (ColumnRefOperator) entry.getKey().accept(visitor, null),
+                                entry -> entry.getValue().accept(visitor, null)));
+                Map<ColumnRefOperator, ScalarOperator> newCommonSubOperatorMap =
+                        tempProject.getCommonSubOperatorMap().entrySet().stream().collect(Collectors.toMap(
+                                entry -> (ColumnRefOperator) entry.getKey().accept(visitor, null),
+                                entry -> entry.getValue().accept(visitor, null)));
+                Projection newProject = new Projection(newColumnRefMap, newCommonSubOperatorMap,
+                        tempProject.needReuseLambdaDependentExpr());
+
+                child.setProjection(newProject);
+                child.getRowOutputInfo(null);
+                leaves.add(new OptExpression(child));
+            }
+        }
+
+        // Modify the inputs and outputs of union operator and local aggregation operators.
         for (int i = 0; i < union.getChildOutputColumns().size(); i++) {
             int finalI = i;
             ScalarOperatorVisitor<ScalarOperator, Void> visitor = new ScalarOperatorVisitor<ScalarOperator, Void>() {
@@ -84,11 +144,13 @@ public class PushDownAggUnionRule extends TransformationRule {
 
                 @Override
                 public ScalarOperator visitVariableReference(ColumnRefOperator columnRefOperator, Void context) {
-                    return union.getChildOutputColumns().get(finalI)
-                            .get(union.getOutputColumnRefOp().indexOf(columnRefOperator));
+                    int index = union.getOutputColumnRefOp().indexOf(columnRefOperator);
+                    if (index == -1) {
+                        return union.getRowOutputInfo(null).getColOutputInfo().get(columnRefOperator.getId()).getColumnRef();
+                    }
+                    return union.getChildOutputColumns().get(finalI).get(index);
                 }
             };
-            List<ScalarOperator> arguments = new ArrayList<>();
             Map<ColumnRefOperator, CallOperator> newAggMap = new HashMap<>();
             for (Map.Entry<ColumnRefOperator, CallOperator> entry : agg.getAggregations().entrySet()) {
                 CallOperator newFn = (CallOperator) entry.getValue().clone();
@@ -101,7 +163,6 @@ public class PushDownAggUnionRule extends TransformationRule {
                     }
                 }
                 newAggMap.put(entry.getKey(), newFn);
-
             }
             List<ColumnRefOperator> newGroupByKeys = new ArrayList<>(agg.getGroupingKeys().size());
             for (ColumnRefOperator groupByKey : agg.getGroupingKeys()) {
@@ -119,7 +180,14 @@ public class PushDownAggUnionRule extends TransformationRule {
                     .setLimit(Operator.DEFAULT_LIMIT)
                     .setProjection(null)
                     .build();
-            OptExpression newAggExpr = OptExpression.create(newAgg, input.inputAt(0).inputAt(i));
+
+            OptExpression newAggExpr;
+            if (leaves.size() > 0) {
+                newAggExpr = OptExpression.create(newAgg, leaves.get(i));
+            } else {
+                newAggExpr = OptExpression.create(newAgg, input.inputAt(0).inputAt(i));
+            }
+
             aggs.add(newAggExpr);
 
             ColumnRefSet columns = new ColumnRefSet();
@@ -128,6 +196,7 @@ public class PushDownAggUnionRule extends TransformationRule {
 
             unionInputs.add(columns.getColumnRefOperators(context.getColumnRefFactory()));
         }
+
         List<ColumnRefOperator> aggOutput = agg.getOutputColumns(null).getColumnRefOperators(context.getColumnRefFactory());
         for (int i = 0; i < aggOutput.size(); i++) {
             if (agg.getAggregations().containsKey(aggOutput.get(i))) {
