@@ -1427,6 +1427,7 @@ public class PlanFragmentBuilder {
                             equalityDeleteTupleDesc);
             icebergScanNode.computeStatistics(optExpression.getStatistics());
             icebergScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
+            icebergScanNode.setOptimizeProperties(node.getOptimizeProperties());
             currentExecGroup.add(icebergScanNode, true);
             try {
                 // set predicate

@@ -49,6 +49,7 @@ import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.ConnectorMgr;
+import com.starrocks.connector.ConnectorTableExecuteHandle;
 import com.starrocks.connector.ConnectorTblMetaInfoMgr;
 import com.starrocks.connector.MetaPreparationItem;
 import com.starrocks.connector.PartitionInfo;
@@ -888,5 +889,18 @@ public class MetadataMgr {
         } else {
             throw new DdlException("Invalid catalog " + catalogName + " , ConnectorMetadata doesn't exist");
         }
+    }
+
+    public void finishOptimize(String catalogName, String dbName, String tableName,
+                               List<TSinkCommitInfo> sinkCommitInfos, ConnectorTableExecuteHandle handle) {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        connectorMetadata.ifPresent(metadata -> {
+            try {
+                metadata.finishOptimize(dbName, tableName, sinkCommitInfos, handle);
+            } catch (StarRocksConnectorException e) {
+                LOG.error("table sink commit failed", e);
+                throw new StarRocksConnectorException(e.getMessage());
+            }
+        });
     }
 }

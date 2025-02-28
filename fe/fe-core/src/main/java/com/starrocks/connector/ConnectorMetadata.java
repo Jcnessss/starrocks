@@ -346,5 +346,10 @@ public interface ConnectorMetadata {
 
     default void shutdown() {
     }
+
+    default void finishOptimize(String dbName, String table, List<TSinkCommitInfo> commitInfos,
+                                ConnectorTableExecuteHandle handle) {
+        throw new StarRocksConnectorException("This connector doesn't support optimize");
+    }
 }
 

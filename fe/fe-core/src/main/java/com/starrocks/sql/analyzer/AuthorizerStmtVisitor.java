@@ -136,6 +136,7 @@ import com.starrocks.sql.ast.KillAnalyzeStmt;
 import com.starrocks.sql.ast.KillStmt;
 import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.ast.MsckRepairTableStmt;
+import com.starrocks.sql.ast.OptimizeIcebergStatement;
 import com.starrocks.sql.ast.PauseRoutineLoadStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.RecoverDbStmt;
@@ -2748,5 +2749,19 @@ public class AuthorizerStmtVisitor implements AstVisitor<Void, ConnectContext> {
                     context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
                     PrivilegeType.USAGE.name(), ObjectType.WAREHOUSE.name(), warehouseName);
         }
+    }
+
+    @Override
+    public Void visitOptimizeIcebergStatement(OptimizeIcebergStatement statement, ConnectContext context) {
+        try {
+            Authorizer.checkTableAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                    statement.getTableName(), PrivilegeType.UPDATE);
+        } catch (AccessDeniedException e) {
+            AccessDeniedException.reportAccessDenied(statement.getTableName().getCatalog(),
+                    context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                    PrivilegeType.UPDATE.name(), ObjectType.TABLE.name(), statement.getTableName().getTbl());
+        }
+        checkSelectTableAction(context, statement.getQueryStatement(), Lists.newArrayList(statement.getTableName()));
+        return null;
     }
 }

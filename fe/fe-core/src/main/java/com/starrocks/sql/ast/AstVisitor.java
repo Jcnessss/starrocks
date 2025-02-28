@@ -1490,4 +1490,8 @@ public interface AstVisitor<R, C> {
     default R visitUserVariableHint(UserVariableHint node, C context) {
         return visitNode(node, context);
     }
+
+    default R visitOptimizeIcebergStatement(OptimizeIcebergStatement statement, C context) {
+        return visitStatement(statement, context);
+    }
 }

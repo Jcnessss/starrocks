@@ -24,6 +24,7 @@ import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -31,6 +32,8 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
     private ScanOperatorPredicates predicates = new ScanOperatorPredicates();
 
     private boolean hasUnknownColumn = true;
+
+    private Map<String, String> optimizeProperties = new HashMap<>();
 
     public LogicalIcebergScanOperator(Table table,
                                       Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
@@ -78,6 +81,14 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
         this.hasUnknownColumn = hasUnknownColumn;
     }
 
+    public void setOptimizeProperties(Map<String, String> optimizeProperties) {
+        this.optimizeProperties = optimizeProperties;
+    }
+
+    public Map<String, String> getOptimizeProperties() {
+        return optimizeProperties;
+    }
+
     @Override
     public <R, C> R accept(OperatorVisitor<R, C> visitor, C context) {
         return visitor.visitLogicalIcebergScan(this, context);
@@ -96,6 +107,7 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
             super.withOperator(scanOperator);
 
             builder.predicates = scanOperator.predicates.clone();
+            builder.optimizeProperties.putAll(scanOperator.optimizeProperties);
             return this;
         }
     }

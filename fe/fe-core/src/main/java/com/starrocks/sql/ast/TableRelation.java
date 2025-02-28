@@ -56,6 +56,8 @@ public class TableRelation extends Relation {
 
     private List<String> pruneScanColumns = Collections.emptyList();
 
+    private Map<String, String> optimizeProperties = new HashMap<>();
+
     public TableRelation(TableName name) {
         super(name.getPos());
         this.name = name;
@@ -212,5 +214,13 @@ public class TableRelation extends Relation {
 
     public Map<Expr, SlotRef> getGeneratedExprToColumnRef() {
         return generatedExprToColumnRef;
+    }
+
+    public Map<String, String> getOptimizeProperties() {
+        return optimizeProperties;
+    }
+
+    public void setOptimizeProperties(Map<String, String> optimizeProperties) {
+        this.optimizeProperties = optimizeProperties;
     }
 }

@@ -87,6 +87,8 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
+import com.starrocks.connector.iceberg.DataFileWithDeleteFiles;
+import com.starrocks.connector.iceberg.IcebergTableExecuteHandle;
 import com.starrocks.http.HttpConnectContext;
 import com.starrocks.http.HttpResultSender;
 import com.starrocks.load.EtlJobType;
@@ -106,6 +108,7 @@ import com.starrocks.persist.CreateInsertOverwriteJobLog;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.planner.FileScanNode;
 import com.starrocks.planner.HiveTableSink;
+import com.starrocks.planner.IcebergScanNode;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanNodeId;
@@ -161,6 +164,7 @@ import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.KillAnalyzeStmt;
 import com.starrocks.sql.ast.KillStmt;
+import com.starrocks.sql.ast.OptimizeIcebergStatement;
 import com.starrocks.sql.ast.PrepareStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.SetCatalogStmt;
@@ -727,6 +731,8 @@ public class StmtExecutor {
                 } else {
                     throw new AnalysisException("old planner does not support CTAS statement");
                 }
+            } else if (parsedStmt instanceof OptimizeIcebergStatement) {
+                handleOptimizeIcebergStmt();
             } else if (parsedStmt instanceof DmlStmt) {
                 handleDMLStmtWithProfile(execPlan, (DmlStmt) parsedStmt);
             } else if (parsedStmt instanceof DdlStmt) {
@@ -2469,9 +2475,22 @@ public class StmtExecutor {
                     }
                 }
 
-                context.getGlobalStateMgr().getMetadataMgr().finishSink(catalogName, dbName, tableName, commitInfos);
-                txnStatus = TransactionStatus.VISIBLE;
-                label = "FAKE_ICEBERG_SINK_LABEL";
+                if (stmt instanceof InsertStmt && ((InsertStmt) stmt).isForOptimize()) {
+                    IcebergScanNode scanNode = (IcebergScanNode) scanNodes.get(0);
+                    long snapShotId = scanNode.getSnapshotId();
+                    List<DataFileWithDeleteFiles> dataFileWithDeleteFiles = scanNode.getDataFileWithDeleteFiles();
+                    IcebergTableExecuteHandle handle
+                            = new IcebergTableExecuteHandle(snapShotId, dataFileWithDeleteFiles);
+                    context.getGlobalStateMgr().getMetadataMgr()
+                            .finishOptimize(catalogName, dbName, tableName, commitInfos, handle);
+                    txnStatus = TransactionStatus.VISIBLE;
+                    label = "FAKE_ICEBERG_OPTIMIZE_LABEL";
+                } else {
+                    context.getGlobalStateMgr().getMetadataMgr()
+                            .finishSink(catalogName, dbName, tableName, commitInfos);
+                    txnStatus = TransactionStatus.VISIBLE;
+                    label = "FAKE_ICEBERG_SINK_LABEL";
+                }
             } else if (targetTable.isHiveTable()) {
                 List<TSinkCommitInfo> commitInfos = coord.getSinkCommitInfos();
                 HiveTableSink hiveTableSink = (HiveTableSink) execPlan.getFragments().get(0).getSink();
@@ -2876,5 +2895,18 @@ public class StmtExecutor {
         return !isInternalStmt
                 && !(parsedStmt instanceof ShowStmt)
                 && !(parsedStmt instanceof AdminSetConfigStmt);
+    }
+
+    private void handleOptimizeIcebergStmt() throws Exception {
+        OptimizeIcebergStatement optimizeIcebergStatement = (OptimizeIcebergStatement) parsedStmt;
+
+        try {
+            InsertStmt insertStmt = optimizeIcebergStatement.getInsertStmt();
+            ExecPlan execPlan = new StatementPlanner().plan(insertStmt, context);
+            handleDMLStmtWithProfile(execPlan, ((OptimizeIcebergStatement) parsedStmt).getInsertStmt());
+        } catch (Throwable t) {
+            LOG.warn("handle optimize iceberg stmt fail", t);
+            throw t;
+        }
     }
 }

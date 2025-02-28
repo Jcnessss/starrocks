@@ -36,6 +36,7 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.ConnectorMetadata;
+import com.starrocks.connector.ConnectorTableExecuteHandle;
 import com.starrocks.connector.ConnectorViewDefinition;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.MetaPreparationItem;
@@ -87,6 +88,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.PartitionSpecParser;
 import org.apache.iceberg.PartitionsTable;
 import org.apache.iceberg.ReplacePartitions;
+import org.apache.iceberg.RewriteFiles;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
 import org.apache.iceberg.Snapshot;
@@ -145,6 +147,7 @@ import static com.starrocks.connector.iceberg.IcebergCatalogType.GLUE_CATALOG;
 import static com.starrocks.connector.iceberg.IcebergCatalogType.HIVE_CATALOG;
 import static com.starrocks.connector.iceberg.IcebergCatalogType.REST_CATALOG;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
+import static java.util.Objects.requireNonNull;
 import static org.apache.iceberg.TableProperties.DEFAULT_WRITE_METRICS_MODE_DEFAULT;
 
 public class IcebergMetadata implements ConnectorMetadata {
@@ -986,7 +989,8 @@ public class IcebergMetadata implements ConnectorMetadata {
         IcebergTable table = (IcebergTable) getTable(dbName, tableName);
         org.apache.iceberg.Table nativeTbl = table.getNativeTable();
         Transaction transaction = nativeTbl.newTransaction();
-        BatchWrite batchWrite = getBatchWrite(transaction, isOverwrite);
+        WriteOp op = isOverwrite ? WriteOp.OVERWRITE : WriteOp.APPEND;
+        BatchWrite batchWrite = getBatchWrite(transaction, op);
 
         PartitionSpec partitionSpec = nativeTbl.spec();
         for (TIcebergDataFile dataFile : dataFiles) {
@@ -1041,8 +1045,13 @@ public class IcebergMetadata implements ConnectorMetadata {
         });
     }
 
-    public BatchWrite getBatchWrite(Transaction transaction, boolean isOverwrite) {
-        return isOverwrite ? new DynamicOverwrite(transaction) : new Append(transaction);
+    public BatchWrite getBatchWrite(Transaction transaction, WriteOp op) {
+        switch (op) {
+            case APPEND: return new Append(transaction);
+            case OVERWRITE: return new DynamicOverwrite(transaction);
+            case REWRITE: return new ReWrite(transaction);
+            default: throw new StarRocksConnectorException("Unsupported write op: " + op);
+        }
     }
 
     public static PartitionData partitionDataFromPath(String relativePartitionPath, PartitionSpec spec) {
@@ -1146,6 +1155,13 @@ public class IcebergMetadata implements ConnectorMetadata {
         metricsReporter.clear();
     }
 
+    public enum WriteOp {
+        APPEND,
+        OVERWRITE,
+        REWRITE,
+        UNKNOWN
+    }
+
     interface BatchWrite {
         void addFile(DataFile file);
 
@@ -1185,6 +1201,40 @@ public class IcebergMetadata implements ConnectorMetadata {
         @Override
         public void commit() {
             replace.commit();
+        }
+    }
+
+    static class ReWrite implements BatchWrite {
+        private final RewriteFiles rewrite;
+
+        public ReWrite(Transaction txn) {
+            rewrite = txn.newRewrite();
+        }
+
+        @Override
+        public void addFile(DataFile file) {
+            rewrite.addFile(file);
+        }
+
+        @Override
+        public void commit() {
+            rewrite.commit();
+        }
+
+        public void addFile(DeleteFile file) {
+            rewrite.addFile(file);
+        }
+
+        public void deleteFile(DataFile file) {
+            rewrite.deleteFile(file);
+        }
+
+        public void deleteFile(DeleteFile file) {
+            rewrite.deleteFile(file);
+        }
+
+        public void validateFromSnapshot(long snapshotId) {
+            rewrite.validateFromSnapshot(snapshotId);
         }
     }
 
@@ -1271,6 +1321,65 @@ public class IcebergMetadata implements ConnectorMetadata {
         @Override
         public int hashCode() {
             return Objects.hash(dbName, tableName, schemaId, specId);
+        }
+    }
+
+    @Override
+    public void finishOptimize(String dbName, String tableName, List<TSinkCommitInfo> commitInfos,
+                               ConnectorTableExecuteHandle handle) {
+        List<TIcebergDataFile> dataFiles = commitInfos.stream()
+                .map(TSinkCommitInfo::getIceberg_data_file).collect(Collectors.toList());
+
+        IcebergTable table = (IcebergTable) getTable(dbName, tableName);
+        org.apache.iceberg.Table nativeTbl = table.getNativeTable();
+        Transaction transaction = nativeTbl.newTransaction();
+        ReWrite batchWrite = (ReWrite) getBatchWrite(transaction, WriteOp.REWRITE);
+
+        PartitionSpec partitionSpec = nativeTbl.spec();
+        for (TIcebergDataFile dataFile : dataFiles) {
+            Metrics metrics = IcebergApiConverter.buildDataFileMetrics(dataFile);
+            DataFiles.Builder builder =
+                    DataFiles.builder(partitionSpec)
+                            .withMetrics(metrics)
+                            .withPath(dataFile.path)
+                            .withFormat(dataFile.format)
+                            .withRecordCount(dataFile.record_count)
+                            .withFileSizeInBytes(dataFile.file_size_in_bytes)
+                            .withSplitOffsets(dataFile.split_offsets);
+
+            if (partitionSpec.isPartitioned()) {
+                String relativePartitionLocation = getIcebergRelativePartitionPath(
+                        nativeTbl.location(), dataFile.partition_path);
+
+                PartitionData partitionData = partitionDataFromPath(
+                        relativePartitionLocation, partitionSpec);
+                builder.withPartition(partitionData);
+            }
+            batchWrite.addFile(builder.build());
+        }
+
+        IcebergTableExecuteHandle icebergHandle = (IcebergTableExecuteHandle) handle;
+        for (DataFileWithDeleteFiles data : icebergHandle.getDataFileWithDeleteFiles()) {
+            batchWrite.deleteFile(data.getDataFile());
+            data.getDeleteFiles().forEach(batchWrite::deleteFile);
+        }
+
+        try {
+            Snapshot snapshot = requireNonNull(
+                    nativeTbl.snapshot(icebergHandle.getSnapshotId()), "snapshot is null");
+            batchWrite.validateFromSnapshot(snapshot.snapshotId());
+            batchWrite.commit();
+            transaction.commitTransaction();
+            asyncRefreshOthersFeMetadataCache(dbName, tableName);
+        } catch (Exception e) {
+            List<String> toDeleteFiles = dataFiles.stream()
+                    .map(TIcebergDataFile::getPath)
+                    .collect(Collectors.toList());
+            icebergCatalog.deleteUncommittedDataFiles(toDeleteFiles);
+            LOG.error("Failed to commit iceberg transaction on {}.{}", dbName, tableName, e);
+            throw new StarRocksConnectorException(e.getMessage());
+        } finally {
+            icebergCatalog.invalidateCacheWithoutTable(new CachingIcebergCatalog.IcebergTableName(dbName, tableName));
         }
     }
 }

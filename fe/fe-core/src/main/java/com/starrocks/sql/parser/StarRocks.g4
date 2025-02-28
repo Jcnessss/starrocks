@@ -61,6 +61,7 @@ statement
     | cancelAlterTableStatement
     | showAlterStatement
     | showTemporaryTablesStatement
+    | optimizeIcebergStatement
 
     // View Statement
     | createViewStatement
@@ -485,6 +486,10 @@ dropTableStatement
 
 cleanTemporaryTableStatement
     : CLEAN TEMPORARY TABLE ON SESSION string
+    ;
+
+optimizeIcebergStatement
+    : explainDesc? OPTIMIZE TABLE qualifiedName (WHERE where=expression)? properties?
     ;
 
 alterTableStatement

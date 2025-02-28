@@ -827,6 +827,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // query timeout cannot greater than one month
     public static final int MAX_QUERY_TIMEOUT = 259200;
 
+    // Optimize iceberg variables
+    public static final String OPTIMIZE_FILE_SIZE_THRESHOLD = "optimize_file_size_threshold";
+
     @VariableMgr.VarAttr(name = ENABLE_PIPELINE, alias = ENABLE_PIPELINE_ENGINE, show = ENABLE_PIPELINE_ENGINE)
     private boolean enablePipelineEngine = true;
 
@@ -4231,6 +4234,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableRewriteUnnestBitmapToArray() {
         return enableRewriteUnnestBitmapToArray;
+    }
+
+    @VarAttr(name = OPTIMIZE_FILE_SIZE_THRESHOLD)
+    private long optimizeFileSizeThreshold = 100 * 1024 * 1024;
+
+    public long getOptimizeFileSizeThreshold() {
+        return optimizeFileSizeThreshold;
+    }
+
+    public void setOptimizeFileSizeThreshold(long optimizeFileSizeThreshold) {
+        this.optimizeFileSizeThreshold = optimizeFileSizeThreshold;
     }
 
     public int getTopnFilterBackPressureMode() {

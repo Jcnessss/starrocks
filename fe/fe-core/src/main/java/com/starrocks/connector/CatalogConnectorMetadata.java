@@ -346,4 +346,10 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     public void msckRepairTable(MsckRepairTableStmt stmt) throws DdlException {
         normal.msckRepairTable(stmt);
     }
+
+    @Override
+    public void finishOptimize(String dbName, String table, List<TSinkCommitInfo> commitInfos,
+                               ConnectorTableExecuteHandle handle) {
+        normal.finishOptimize(dbName, table, commitInfos, handle);
+    }
 }

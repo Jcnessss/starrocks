@@ -60,12 +60,19 @@ public class IcebergTableSink extends DataSink {
     private final String tableIdentifier;
     private final CloudConfiguration cloudConfiguration;
     private final List<String> dataColNames;
+    private static final String WRITE_TABLE_LOCATION = "write_table_location";
+
 
     public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink,
                             SessionVariable sessionVariable, InsertStmt insertStmt) {
         Table nativeTable = icebergTable.getNativeTable();
         this.desc = desc;
-        this.location = nativeTable.location();
+        if (insertStmt.isForOptimize()) {
+            this.location = insertStmt.getOptimizeProperties()
+                    .getOrDefault(WRITE_TABLE_LOCATION, nativeTable.location());
+        } else {
+            this.location = nativeTable.location();
+        }
         this.targetTableId = icebergTable.getId();
         this.tableIdentifier = icebergTable.getUUID();
         this.isStaticPartitionSink = isStaticPartitionSink;

@@ -706,7 +706,9 @@ public class IcebergMetadataTest extends TableTestBase {
                 result = icebergTable;
                 minTimes = 0;
 
-                metadata.getBatchWrite((Transaction) any, anyBoolean);
+                IcebergMetadata.WriteOp op = anyBoolean ? IcebergMetadata.WriteOp.OVERWRITE
+                        : IcebergMetadata.WriteOp.APPEND;
+                metadata.getBatchWrite((Transaction) any, op);
                 result = append;
                 minTimes = 0;
             }

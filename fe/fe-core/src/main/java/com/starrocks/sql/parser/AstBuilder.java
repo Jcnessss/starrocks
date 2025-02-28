@@ -294,6 +294,7 @@ import com.starrocks.sql.ast.MultiItemListPartitionDesc;
 import com.starrocks.sql.ast.MultiRangePartitionDesc;
 import com.starrocks.sql.ast.NormalizedTableFunctionRelation;
 import com.starrocks.sql.ast.OptimizeClause;
+import com.starrocks.sql.ast.OptimizeIcebergStatement;
 import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.ast.PartitionKeyDesc;
 import com.starrocks.sql.ast.PartitionNames;
@@ -8022,5 +8023,29 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
         }
         return new MsckRepairTableStmt(tableName, op, properties, pos);
+    }
+
+
+    @Override
+    public ParseNode visitOptimizeIcebergStatement(StarRocksParser.OptimizeIcebergStatementContext context) {
+        QualifiedName qualifiedName = getQualifiedName(context.qualifiedName());
+        TableName tableName = qualifiedNameToTableName(qualifiedName);
+
+        Expr where = context.where != null ? (Expr) visit(context.where) : null;
+
+        Map<String, String> properties = new HashMap<>();
+        if (context.properties() != null) {
+            List<Property> propertyList = visit(context.properties().property(), Property.class);
+            for (Property property : propertyList) {
+                properties.put(property.getKey(), property.getValue());
+            }
+        }
+
+        OptimizeIcebergStatement stmt = new OptimizeIcebergStatement(tableName, where, properties, createPos(context));
+        if (context.explainDesc() != null) {
+            stmt.setIsExplain(true, getExplainType(context.explainDesc()));
+        }
+
+        return stmt;
     }
 }

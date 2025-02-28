@@ -36,6 +36,7 @@ import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.iceberg.DataFileWithDeleteFiles;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergRemoteFileDesc;
 import com.starrocks.credential.CloudConfiguration;
@@ -43,6 +44,8 @@ import com.starrocks.credential.CloudConfigurationFactory;
 import com.starrocks.credential.CloudType;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.optimizer.Utils;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
 import com.starrocks.thrift.TExplainLevel;
@@ -66,16 +69,19 @@ import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.util.StructLikeWrapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
@@ -90,6 +96,18 @@ public class IcebergScanNode extends ScanNode {
     private CloudConfiguration cloudConfiguration = null;
     private final List<Integer> deleteColumnSlotIds = new ArrayList<>();
     private final TupleDescriptor equalityDeleteTupleDesc;
+    private long snapshotId;
+    private List<DataFileWithDeleteFiles> dataFileWithDeleteFiles = new ArrayList<>();
+    private Map<String, String> optimizeProperties = new HashMap<>();
+    private final Map<StructLikeWrapper, Long> partitionDataSizeInBytesMap = new HashMap<>();
+    private final Map<PartitionSpec, Set<Column>> specPartitionColumnMap = new HashMap<>();
+    List<Column> predicateColumns = new ArrayList<>();
+
+    private static final String PREDICATE_CHECK = "predicate_check";
+    private static final String FILE_SIZE_THRESHOLD = "file_size_threshold";
+    private static final String MAX_PARTITION_DATA_SIZE = "max_partition_data_size";
+    private static final String WRITE_TABLE_LOCATION = "write_table_location";
+    private static final String WRITE_COLUMNS = "write_columns";
 
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, TupleDescriptor equalityDeleteTupleDesc) {
         super(id, desc, planNodeName);
@@ -178,10 +196,10 @@ public class IcebergScanNode extends ScanNode {
             LOG.warn(String.format("Table %s has no snapshot!", icebergTable.getRemoteTableName()));
             return;
         }
+        this.snapshotId = snapshot.get().snapshotId();
 
         String catalogName = icebergTable.getCatalogName();
         long snapshotId = snapshot.get().snapshotId();
-
         List<RemoteFileInfo> splits = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
                 catalogName, icebergTable, null, snapshotId, predicate, null, -1);
 
@@ -191,7 +209,8 @@ public class IcebergScanNode extends ScanNode {
             return;
         }
 
-        IcebergRemoteFileDesc remoteFileDesc = (IcebergRemoteFileDesc) splits.get(0).getFiles().get(0);
+        IcebergRemoteFileDesc originRemoteFileDesc = (IcebergRemoteFileDesc) splits.get(0).getFiles().get(0);
+        IcebergRemoteFileDesc remoteFileDesc = prune(originRemoteFileDesc);
         if (remoteFileDesc == null) {
             LOG.warn("There is no scan tasks after planFies on {}.{} and predicate: [{}]",
                     icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName(), predicate);
@@ -259,6 +278,9 @@ public class IcebergScanNode extends ScanNode {
             hdfsScanRange.setModification_time(0);
             hdfsScanRange.setFile_format(IcebergApiConverter.getHdfsFileFormat(file.format()).toThrift());
 
+            DataFileWithDeleteFiles.Builder builder = new DataFileWithDeleteFiles.Builder();
+            builder.dataFile(file);
+
             List<TIcebergDeleteFile> deleteFiles = new ArrayList<>();
             for (DeleteFile deleteFile : task.deletes()) {
                 FileContent content = deleteFile.content();
@@ -283,6 +305,8 @@ public class IcebergScanNode extends ScanNode {
                         TIcebergFileContent.POSITION_DELETES);
                 target.setLength(deleteFile.fileSizeInBytes());
                 deleteFiles.add(target);
+
+                builder.addDeleteFile(deleteFile);
             }
 
             if (!deleteFiles.isEmpty()) {
@@ -299,6 +323,8 @@ public class IcebergScanNode extends ScanNode {
 
             TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
             scanRangeLocations.addToLocations(scanRangeLocation);
+
+            dataFileWithDeleteFiles.add(builder.build());
 
             result.add(scanRangeLocations);
         }
@@ -432,5 +458,106 @@ public class IcebergScanNode extends ScanNode {
     @Override
     protected boolean supportTopNRuntimeFilter() {
         return !icebergTable.isV2Format();
+    }
+
+    public long getSnapshotId() {
+        return snapshotId;
+    }
+
+    public List<DataFileWithDeleteFiles> getDataFileWithDeleteFiles() {
+        return dataFileWithDeleteFiles;
+    }
+
+    public void setOptimizeProperties(Map<String, String> optimizeProperties) {
+        this.optimizeProperties = optimizeProperties;
+    }
+
+    private IcebergRemoteFileDesc prune(IcebergRemoteFileDesc remoteFileDesc) throws UserException {
+        if (remoteFileDesc == null) {
+            return null;
+        }
+
+        Optional<Long> fileSizeThreshold = parseOptionalLong(FILE_SIZE_THRESHOLD);
+        Optional<Long> maxPartitionDataSize = parseOptionalLong(MAX_PARTITION_DATA_SIZE);
+
+        List<FileScanTask> result = new ArrayList<>();
+        List<FileScanTask> fileScanTasks = remoteFileDesc.getIcebergScanTasks();
+        for (FileScanTask scanTask : fileScanTasks) {
+            if (scanTask.deletes().isEmpty() && fileSizeThreshold.isPresent()
+                    && scanTask.file().fileSizeInBytes() > fileSizeThreshold.get()) {
+                continue;
+            }
+
+            PartitionSpec spec = scanTask.spec();
+            if (!checkPredicateValid(predicate, spec)) {
+                throw new UserException("Optimize iceberg only support to handle partition WHERE expression");
+            }
+
+            if (maxPartitionDataSize.isPresent() && spec.isPartitioned()) {
+                DataFile dataFile = scanTask.file();
+                StructLikeWrapper partition = StructLikeWrapper.forType(spec.partitionType())
+                        .set(dataFile.partition());
+                Long partitionDataSizeInBytes = partitionDataSizeInBytesMap.get(partition);
+                if (partitionDataSizeInBytes == null) {
+                    partitionDataSizeInBytesMap.put(partition, dataFile.fileSizeInBytes());
+                } else if (partitionDataSizeInBytes <= maxPartitionDataSize.get()) {
+                    partitionDataSizeInBytesMap.put(partition, dataFile.fileSizeInBytes() + partitionDataSizeInBytes);
+                } else {
+                    continue;
+                }
+            }
+
+            result.add(scanTask);
+        }
+
+        return IcebergRemoteFileDesc.createIcebergRemoteFileDesc(result);
+    }
+
+    private Optional<Long> parseOptionalLong(String propertyKey) throws UserException {
+        String valueStr = optimizeProperties.getOrDefault(propertyKey, null);
+        if (valueStr == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Long.parseLong(valueStr));
+        } catch (NumberFormatException e) {
+            throw new UserException("Invalid argument " + propertyKey + ": " + valueStr);
+        }
+    }
+
+    private boolean checkPredicateValid(ScalarOperator predicate, PartitionSpec spec) throws UserException {
+        if (predicate == null) {
+            return true;
+        }
+
+        Optional<Long> predicateCheck = parseOptionalLong(PREDICATE_CHECK);
+        if (predicateCheck.isEmpty()) {
+            return true;
+        }
+
+        if (spec.isUnpartitioned()) {
+            return false;
+        }
+
+        if (predicateColumns.isEmpty()) {
+            Utils.extractConjuncts(predicate).stream()
+                    .map(op -> op.getColumnRefs().get(0).getName())
+                    .map(icebergTable::getColumn)
+                    .forEach(predicateColumns::add);
+        }
+
+        Set<Column> partitionColumns = specPartitionColumnMap.computeIfAbsent(spec, s ->
+                s.fields().stream()
+                        .map(field -> icebergTable.getColumn(field.name()))
+                        .collect(Collectors.toSet())
+        );
+
+        for (Column column : predicateColumns) {
+            if (!partitionColumns.contains(column)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

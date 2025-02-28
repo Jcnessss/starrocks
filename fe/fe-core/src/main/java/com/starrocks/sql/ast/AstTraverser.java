@@ -195,4 +195,17 @@ public class AstTraverser<R, C> implements AstVisitor<R, C> {
     public R visitSubquery(Subquery node, C context) {
         return visit(node.getQueryStatement(), context);
     }
+
+    @Override
+    public R visitOptimizeIcebergStatement(OptimizeIcebergStatement statement, C context) {
+        if (statement.getQueryStatement() != null) {
+            visit(statement.getQueryStatement(), context);
+        }
+
+        if (statement.getInsertStmt() != null) {
+            visit(statement.getInsertStmt(), context);
+        }
+
+        return null;
+    }
 }

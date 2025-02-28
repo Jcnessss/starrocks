@@ -97,6 +97,9 @@ public class InsertStmt extends DmlStmt {
 
     private boolean isVersionOverwrite = false;
 
+    private Map<String, String> optimizeProperties;
+    private boolean forOptimize = false;
+
     public InsertStmt(TableName tblName, PartitionNames targetPartitionNames, String label, List<String> cols,
                       QueryStatement queryStatement, boolean isOverwrite) {
         this(tblName, targetPartitionNames, label, cols, queryStatement, isOverwrite, NodePosition.ZERO);
@@ -155,6 +158,20 @@ public class InsertStmt extends DmlStmt {
         this.tableFunctionAsTargetTable = false;
         this.tableFunctionProperties = null;
         this.blackHoleTableAsTargetTable = true;
+    }
+
+    // Ctor for Optimize table
+    public InsertStmt(TableName name, QueryStatement queryStatement, Map<String, String> properties, List<String> cols,
+                      NodePosition pos) {
+        super(pos);
+        this.tblName = name;
+        this.queryStatement = queryStatement;
+        this.forOptimize = true;
+        this.optimizeProperties = properties;
+        this.targetColumnNames = cols;
+        this.tableFunctionAsTargetTable = false;
+        this.tableFunctionProperties = null;
+        this.blackHoleTableAsTargetTable = false;
     }
 
     public Table getTargetTable() {
@@ -318,6 +335,10 @@ public class InsertStmt extends DmlStmt {
         return forCTAS;
     }
 
+    public boolean isForOptimize() {
+        return forOptimize;
+    }
+
     public <R, C> R accept(AstVisitor<R, C> visitor, C context) {
         return visitor.visitInsertStatement(this, context);
     }
@@ -355,5 +376,9 @@ public class InsertStmt extends DmlStmt {
         checkState(tableFunctionAsTargetTable, "tableFunctionAsTargetTable is false");
         List<Column> columns = collectSelectedFieldsFromQueryStatement();
         return new TableFunctionTable(columns, getTableFunctionProperties(), sessionVariable);
+    }
+
+    public Map<String, String> getOptimizeProperties() {
+        return optimizeProperties;
     }
 }

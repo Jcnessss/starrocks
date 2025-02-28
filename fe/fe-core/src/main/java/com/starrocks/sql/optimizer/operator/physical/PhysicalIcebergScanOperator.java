@@ -22,12 +22,17 @@ import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.logical.LogicalIcebergScanOperator;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
+    private Map<String, String> optimizeProperties = new HashMap<>();
 
     public PhysicalIcebergScanOperator(LogicalIcebergScanOperator scanOperator) {
         super(OperatorType.PHYSICAL_ICEBERG_SCAN, scanOperator);
         this.predicates = scanOperator.getScanOperatorPredicates();
+        this.optimizeProperties = scanOperator.getOptimizeProperties();
     }
 
     @Override
@@ -38,6 +43,10 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     @Override
     public void setScanOperatorPredicates(ScanOperatorPredicates predicates) {
         this.predicates = predicates;
+    }
+
+    public Map<String, String> getOptimizeProperties() {
+        return optimizeProperties;
     }
 
     @Override
