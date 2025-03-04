@@ -399,7 +399,7 @@ public class IcebergAlterTableExecutor extends ConnectorAlterTableExecutor {
         actions.add(() -> {
             ExpireSnapshots expireSnapshots = transaction.expireSnapshots();
             if (olderThanMillis != -1) {
-                expireSnapshots = expireSnapshots.expireOlderThan(olderThanMillis);
+                expireSnapshots = expireSnapshots.expireOlderThan(olderThanMillis).cleanExpiredFiles(true);
             }
             expireSnapshots.commit();
         });
@@ -429,8 +429,7 @@ public class IcebergAlterTableExecutor extends ConnectorAlterTableExecutor {
                         .castTo(Type.VARCHAR)
                         .map(ConstantOperator::getChar)
                         .orElseThrow(() -> new StarRocksConnectorException("invalid arg %s", args.get(1)));
-            }
-            else {
+            } else {
                 extraTableLocation = "";
             }
         }
