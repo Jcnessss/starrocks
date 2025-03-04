@@ -26,6 +26,7 @@ import com.starrocks.credential.CloudType;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
+import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TCompressionType;
 import com.starrocks.thrift.TDataSink;
@@ -35,6 +36,8 @@ import com.starrocks.thrift.TIcebergTableSink;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import static com.starrocks.analysis.OutFileClause.PARQUET_COMPRESSION_TYPE_MAP;
@@ -56,16 +59,22 @@ public class IcebergTableSink extends DataSink {
     private final boolean isStaticPartitionSink;
     private final String tableIdentifier;
     private final CloudConfiguration cloudConfiguration;
+    private final List<String> dataColNames;
 
-    public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink, SessionVariable sessionVariable) {
+    public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink,
+                            SessionVariable sessionVariable, InsertStmt insertStmt) {
         Table nativeTable = icebergTable.getNativeTable();
         this.desc = desc;
         this.location = nativeTable.location();
         this.targetTableId = icebergTable.getId();
         this.tableIdentifier = icebergTable.getUUID();
         this.isStaticPartitionSink = isStaticPartitionSink;
-        this.fileFormat = nativeTable.properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT)
-                .toLowerCase();
+        if (insertStmt != null && insertStmt.icebergOrcPartialInsert()) {
+            this.dataColNames = insertStmt.getTargetColumnNames();
+        } else {
+            this.dataColNames = new ArrayList<>();
+        }
+        this.fileFormat = icebergTable.getIcebergStorageFormat().toString().toLowerCase();
         this.compressionType = sessionVariable.getConnectorSinkCompressionCodec();
         this.targetMaxFileSize = sessionVariable.getConnectorSinkTargetMaxFileSize();
         String catalogName = icebergTable.getCatalogName();
@@ -110,6 +119,9 @@ public class IcebergTableSink extends DataSink {
         TCloudConfiguration tCloudConfiguration = new TCloudConfiguration();
         cloudConfiguration.toThrift(tCloudConfiguration);
         tIcebergTableSink.setCloud_configuration(tCloudConfiguration);
+        if (!dataColNames.isEmpty()) {
+            tIcebergTableSink.setData_column_names(dataColNames);
+        }
 
         tDataSink.setIceberg_table_sink(tIcebergTableSink);
         return tDataSink;

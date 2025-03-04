@@ -23,6 +23,7 @@ import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
@@ -34,6 +35,7 @@ import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.connector.hive.HiveStorageFormat;
 import com.starrocks.connector.hive.HiveWriteUtils;
+import com.starrocks.connector.iceberg.IcebergStorageFormat;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.CatalogMgr;
 import com.starrocks.sql.ast.DefaultValueExpr;
@@ -226,6 +228,12 @@ public class InsertAnalyzer {
                     ((HiveTable) table).getStorageFormat() == HiveStorageFormat.ORC) {
                 if (targetColumns.size() < table.getBaseSchema().size()) {
                     insertStmt.setHiveOrcPartialInsert();
+                }
+            }
+            if (table.isIcebergTable()  &&
+                    ((IcebergTable) table).getIcebergStorageFormat() == IcebergStorageFormat.ORC) {
+                if (targetColumns.size() < table.getBaseSchema().size()) {
+                    insertStmt.setIcebergOrcPartialInsert();
                 }
             }
         }

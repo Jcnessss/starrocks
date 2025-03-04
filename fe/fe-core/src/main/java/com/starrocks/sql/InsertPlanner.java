@@ -254,7 +254,7 @@ public class InsertPlanner {
         List<ColumnRefOperator> outputColumns = new ArrayList<>();
         Table targetTable = insertStmt.getTargetTable();
 
-        if (insertStmt.usePartialUpdate() || insertStmt.hiveOrcPartialInsert()) {
+        if (insertStmt.usePartialUpdate() || insertStmt.hiveOrcPartialInsert() || insertStmt.icebergOrcPartialInsert()) {
             inferOutputSchemaForPartialUpdate(insertStmt);
         } else {
             outputBaseSchema = targetTable.getBaseSchema();
@@ -409,7 +409,7 @@ public class InsertPlanner {
             } else if (targetTable instanceof IcebergTable) {
                 descriptorTable.addReferencedTable(targetTable);
                 dataSink = new IcebergTableSink((IcebergTable) targetTable, tupleDesc,
-                        isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable());
+                        isKeyPartitionStaticInsert(insertStmt, queryRelation), session.getSessionVariable(), insertStmt);
             } else if (targetTable instanceof HiveTable) {
                 // Do partition prune for hive table sink to decrease partition meta in rpc
                 doPartitionPruneForHiveSink(insertStmt);
@@ -617,7 +617,7 @@ public class InsertPlanner {
             } else {
                 int idx = insertStatement.getTargetColumnNames().indexOf(targetColumn.getName().toLowerCase());
                 if (idx == -1) {
-                    if (insertStatement.hiveOrcPartialInsert()) {
+                    if (insertStatement.hiveOrcPartialInsert() || insertStatement.icebergOrcPartialInsert()) {
                         continue;
                     }
                     ScalarOperator scalarOperator;
@@ -696,7 +696,8 @@ public class InsertPlanner {
                         columnRefFactory.create(scalarOperator, scalarOperator.getType(), scalarOperator.isNullable());
                 outputColumns.add(columnRefOperator);
                 columnRefMap.put(columnRefOperator, scalarOperator);
-            } else if (baseSchema.contains(outputFullSchema.get(columnIdx)) && !insertStatement.hiveOrcPartialInsert()) {
+            } else if (baseSchema.contains(outputFullSchema.get(columnIdx)) && !insertStatement.hiveOrcPartialInsert()
+                    && !insertStatement.icebergOrcPartialInsert()) {
                 ColumnRefOperator columnRefOperator = outputColumns.get(columnIdx);
                 columnRefMap.put(columnRefOperator, columnRefOperator);
             }

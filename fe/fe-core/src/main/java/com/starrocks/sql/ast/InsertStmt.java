@@ -62,6 +62,7 @@ public class InsertStmt extends DmlStmt {
     private List<String> targetColumnNames;
     private boolean usePartialUpdate = false;
     private boolean hiveOrcPartialInsert = false;
+    private boolean icebergOrcPartialInsert = false;
     private QueryStatement queryStatement;
     private String label = null;
 
@@ -265,6 +266,14 @@ public class InsertStmt extends DmlStmt {
 
     public boolean hiveOrcPartialInsert() {
         return this.hiveOrcPartialInsert;
+    }
+
+    public boolean icebergOrcPartialInsert() {
+        return icebergOrcPartialInsert;
+    }
+
+    public void setIcebergOrcPartialInsert() {
+        this.icebergOrcPartialInsert = true;
     }
 
     public void setTargetPartitionNames(PartitionNames targetPartitionNames) {

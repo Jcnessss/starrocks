@@ -29,6 +29,7 @@ import com.starrocks.common.util.Util;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergCatalogType;
+import com.starrocks.connector.iceberg.IcebergStorageFormat;
 import com.starrocks.rpc.ConfigurableSerDesFactory;
 import com.starrocks.server.CatalogMgr;
 import com.starrocks.server.GlobalStateMgr;
@@ -63,8 +64,6 @@ import java.util.stream.Collectors;
 
 import static com.starrocks.connector.iceberg.IcebergCatalogProperties.ICEBERG_CATALOG_TYPE;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.getResourceMappingCatalogName;
-import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
-import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 
 public class IcebergTable extends Table {
     private static final Logger LOG = LogManager.getLogger(IcebergTable.class);
@@ -93,6 +92,8 @@ public class IcebergTable extends Table {
 
     private Set<Integer> identifierFieldIds = Sets.newHashSet();
 
+    private IcebergStorageFormat icebergStorageFormat;
+
     public IcebergTable() {
         super(TableType.ICEBERG);
     }
@@ -108,6 +109,7 @@ public class IcebergTable extends Table {
         this.comment =  comment;
         this.nativeTable = nativeTable;
         this.icebergProperties = icebergProperties;
+        this.icebergStorageFormat = IcebergStorageFormat.fromString(nativeTable.properties());
     }
 
     @Override
@@ -392,9 +394,7 @@ public class IcebergTable extends Table {
 
     @Override
     public boolean supportInsert() {
-        // for now, only support writing iceberg table with parquet file format
-        return getNativeTable().properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT)
-                .equalsIgnoreCase(PARQUET_FORMAT);
+        return true;
     }
 
     @Override
@@ -419,6 +419,10 @@ public class IcebergTable extends Table {
         return Objects.equal(catalogName, otherTable.getCatalogName()) &&
                 Objects.equal(remoteDbName, otherTable.remoteDbName) &&
                 Objects.equal(tableIdentifier, otherTable.getTableIdentifier());
+    }
+
+    public IcebergStorageFormat getIcebergStorageFormat() {
+        return icebergStorageFormat;
     }
 
     public static Builder builder() {
