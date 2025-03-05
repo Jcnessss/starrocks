@@ -179,6 +179,8 @@ public class ResourceGroup {
     private List<String> showClassifier(ResourceGroupClassifier classifier, boolean verbose) {
         return COLUMN_METAS.stream()
                 .filter(meta -> verbose || meta.visible)
+                .filter(meta -> !meta.column.nameEquals(CPU_WEIGHT, false) &&
+                        !meta.column.nameEquals(MEM_LIMIT, false))
                 .map(meta -> meta.valueSupplier.apply(this, classifier))
                 .collect(Collectors.toList());
     }
