@@ -37,8 +37,10 @@ import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.THiveTableSink;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.starrocks.analysis.OutFileClause.PARQUET_COMPRESSION_TYPE_MAP;
 import static com.starrocks.connector.hive.HiveMetastoreApiConverter.toTextFileFormatDesc;
@@ -66,7 +68,10 @@ public class HiveTableSink extends DataSink {
         this.stagingDir = HiveWriteUtils.getStagingDir(hiveTable, sessionVariable.getHiveTempStagingDir());
         this.partitionColNames = hiveTable.getPartitionColumnNames();
         if (insertStmt != null && insertStmt.hiveOrcPartialInsert()) {
-            this.dataColNames = insertStmt.getTargetColumnNames();
+            this.dataColNames = hiveTable.getDataColumnNames().stream()
+                    .filter(colName -> !partitionColNames.contains(colName)
+                            && insertStmt.getTargetColumnNames().contains(colName))
+                    .collect(Collectors.toList());
         } else {
             this.dataColNames = hiveTable.getDataColumnNames();
         }
