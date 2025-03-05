@@ -15,6 +15,7 @@
 package com.starrocks.sql.analyzer;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotRef;
@@ -60,7 +61,11 @@ public class OptimizeIcebergAnalyzer {
         String cols = properties.getOrDefault(WRITE_COLUMNS, null);
         List<String> targetColumnNames = null;
         if (cols != null) {
-            targetColumnNames = Lists.newArrayList(cols.split(","));
+            targetColumnNames = Lists.newArrayList(
+                    Splitter.on(',')
+                            .trimResults()
+                            .omitEmptyStrings()
+                            .split(cols));
         }
 
         SelectList selectList = new SelectList();

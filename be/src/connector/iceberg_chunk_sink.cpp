@@ -99,13 +99,8 @@ StatusOr<std::unique_ptr<ConnectorChunkSink>> IcebergChunkSinkProvider::create_c
         file_writer_factory = std::make_unique<formats::UnknownFileWriterFactory>(ctx->format);
     }
 
-    std::vector<std::string> partition_columns;
-    std::vector<std::unique_ptr<ColumnEvaluator>> partition_column_evaluators;
-    for (auto idx : ctx->partition_column_indices) {
-        partition_columns.push_back(ctx->column_names[idx]);
-        partition_column_evaluators.push_back(ctx->column_evaluators[idx]->clone());
-    }
-    return std::make_unique<connector::IcebergChunkSink>(partition_columns, std::move(partition_column_evaluators),
+    auto partition_column_evaluators = ColumnEvaluator::clone(ctx->partition_column_evaluators);
+    return std::make_unique<connector::IcebergChunkSink>(ctx->partition_column_names, std::move(partition_column_evaluators),
                                                          std::move(location_provider), std::move(file_writer_factory),
                                                          ctx->max_file_size, runtime_state);
 }

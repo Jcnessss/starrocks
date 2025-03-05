@@ -641,7 +641,7 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
             }
             scanOperator = new LogicalIcebergScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, partitionPredicate);
-            ((LogicalIcebergScanOperator) scanOperator).setOptimizeProperties(node.getOptimizeProperties());
+            ((LogicalIcebergScanOperator) scanOperator).setScanOperatorProperties(node.getOptimizeProperties());
         } else if (Table.TableType.HUDI.equals(node.getTable().getType())) {
             scanOperator = new LogicalHudiScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, partitionPredicate);

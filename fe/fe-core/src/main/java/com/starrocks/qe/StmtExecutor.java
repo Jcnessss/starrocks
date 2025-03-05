@@ -109,6 +109,7 @@ import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.planner.FileScanNode;
 import com.starrocks.planner.HiveTableSink;
 import com.starrocks.planner.IcebergScanNode;
+import com.starrocks.planner.IcebergTableSink;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanNodeId;
@@ -2468,7 +2469,10 @@ public class StmtExecutor {
                 txnStatus = TransactionStatus.VISIBLE;
             } else if (targetTable.isIcebergTable()) {
                 // TODO(stephen): support abort interface and delete data files when aborting.
+                IcebergTableSink icebergTableSink = (IcebergTableSink) execPlan.getFragments().get(0).getSink();
+                String sinkTableLocation = icebergTableSink.getSinkTableLocation();
                 List<TSinkCommitInfo> commitInfos = coord.getSinkCommitInfos();
+                commitInfos.get(0).setStaging_dir(sinkTableLocation);
                 if (stmt instanceof InsertStmt && ((InsertStmt) stmt).isOverwrite()) {
                     for (TSinkCommitInfo commitInfo : commitInfos) {
                         commitInfo.setIs_overwrite(true);

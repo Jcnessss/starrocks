@@ -176,6 +176,14 @@ public abstract class LogicalScanOperator extends LogicalOperator {
         throw new AnalysisException("Operation setScanOperatorPredicates(...) is not supported by this ScanOperator.");
     }
 
+    public void setScanOperatorProperties(Map<String, String> properties) throws AnalysisException {
+        throw new AnalysisException("Operation setScanOperatorProperties(...) is not supported by this ScanOperator.");
+    }
+
+    public Map<String, String> getScanOperatorProperties() throws AnalysisException {
+        throw new AnalysisException("Operation getScanOperatorProperties() is not supported by this ScanOperator.");
+    }
+
     @Override
     public <R, C> R accept(OptExpressionVisitor<R, C> visitor, OptExpression optExpression, C context) {
         return visitor.visitLogicalTableScan(optExpression, context);

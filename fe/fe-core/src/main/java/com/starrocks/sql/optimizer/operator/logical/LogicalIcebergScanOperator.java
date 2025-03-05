@@ -81,11 +81,13 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
         this.hasUnknownColumn = hasUnknownColumn;
     }
 
-    public void setOptimizeProperties(Map<String, String> optimizeProperties) {
-        this.optimizeProperties = optimizeProperties;
+    @Override
+    public void setScanOperatorProperties(Map<String, String> properties) {
+        this.optimizeProperties = properties;
     }
 
-    public Map<String, String> getOptimizeProperties() {
+    @Override
+    public Map<String, String> getScanOperatorProperties() {
         return optimizeProperties;
     }
 

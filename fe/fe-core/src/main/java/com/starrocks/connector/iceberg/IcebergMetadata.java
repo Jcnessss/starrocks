@@ -1335,6 +1335,8 @@ public class IcebergMetadata implements ConnectorMetadata {
         Transaction transaction = nativeTbl.newTransaction();
         ReWrite batchWrite = (ReWrite) getBatchWrite(transaction, WriteOp.REWRITE);
 
+        String tableLocation = commitInfos.get(0).getStaging_dir();
+
         PartitionSpec partitionSpec = nativeTbl.spec();
         for (TIcebergDataFile dataFile : dataFiles) {
             Metrics metrics = IcebergApiConverter.buildDataFileMetrics(dataFile);
@@ -1349,7 +1351,7 @@ public class IcebergMetadata implements ConnectorMetadata {
 
             if (partitionSpec.isPartitioned()) {
                 String relativePartitionLocation = getIcebergRelativePartitionPath(
-                        nativeTbl.location(), dataFile.partition_path);
+                        tableLocation, dataFile.partition_path);
 
                 PartitionData partitionData = partitionDataFromPath(
                         relativePartitionLocation, partitionSpec);

@@ -4236,8 +4236,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return enableRewriteUnnestBitmapToArray;
     }
 
-    @VarAttr(name = OPTIMIZE_FILE_SIZE_THRESHOLD)
-    private long optimizeFileSizeThreshold = 100 * 1024 * 1024;
+    @VariableMgr.VarAttr(name = OPTIMIZE_FILE_SIZE_THRESHOLD)
+    private long optimizeFileSizeThreshold = 104857600; // 100MB
 
     public long getOptimizeFileSizeThreshold() {
         return optimizeFileSizeThreshold;

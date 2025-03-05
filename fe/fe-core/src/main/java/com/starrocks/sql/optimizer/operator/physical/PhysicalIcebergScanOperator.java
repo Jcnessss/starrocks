@@ -32,7 +32,7 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     public PhysicalIcebergScanOperator(LogicalIcebergScanOperator scanOperator) {
         super(OperatorType.PHYSICAL_ICEBERG_SCAN, scanOperator);
         this.predicates = scanOperator.getScanOperatorPredicates();
-        this.optimizeProperties = scanOperator.getOptimizeProperties();
+        this.optimizeProperties = scanOperator.getScanOperatorProperties();
     }
 
     @Override

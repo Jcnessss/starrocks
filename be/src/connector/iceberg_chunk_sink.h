@@ -61,6 +61,8 @@ struct IcebergChunkSinkContext : public ConnectorChunkSinkContext {
     PriorityThreadPool* executor = nullptr;
     TCloudConfiguration cloud_conf;
     pipeline::FragmentContext* fragment_context = nullptr;
+    std::vector<std::unique_ptr<ColumnEvaluator>> partition_column_evaluators;
+    std::vector<std::string> partition_column_names;
 };
 
 class IcebergChunkSinkProvider : public ConnectorChunkSinkProvider {

@@ -16,6 +16,7 @@ package com.starrocks.planner;
 
 import com.google.common.base.Preconditions;
 import com.starrocks.analysis.TupleDescriptor;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.connector.CatalogConnector;
@@ -39,6 +40,7 @@ import org.apache.iceberg.aws.AwsProperties;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 import static com.starrocks.analysis.OutFileClause.PARQUET_COMPRESSION_TYPE_MAP;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
@@ -67,7 +69,7 @@ public class IcebergTableSink extends DataSink {
                             SessionVariable sessionVariable, InsertStmt insertStmt) {
         Table nativeTable = icebergTable.getNativeTable();
         this.desc = desc;
-        if (insertStmt.isForOptimize()) {
+        if (insertStmt != null && insertStmt.isForOptimize()) {
             this.location = insertStmt.getOptimizeProperties()
                     .getOrDefault(WRITE_TABLE_LOCATION, nativeTable.location());
         } else {
@@ -77,7 +79,10 @@ public class IcebergTableSink extends DataSink {
         this.tableIdentifier = icebergTable.getUUID();
         this.isStaticPartitionSink = isStaticPartitionSink;
         if (insertStmt != null && insertStmt.icebergOrcPartialInsert()) {
-            this.dataColNames = insertStmt.getTargetColumnNames();
+            this.dataColNames = icebergTable.getFullSchema().stream()
+                    .map(Column::getName)
+                    .filter(colName -> insertStmt.getTargetColumnNames().contains(colName))
+                    .collect(Collectors.toList());
         } else {
             this.dataColNames = new ArrayList<>();
         }
@@ -147,5 +152,9 @@ public class IcebergTableSink extends DataSink {
     @Override
     public boolean canUseRuntimeAdaptiveDop() {
         return true;
+    }
+
+    public String getSinkTableLocation() {
+        return location;
     }
 }
