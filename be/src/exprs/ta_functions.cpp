@@ -762,12 +762,14 @@ StatusOr<ColumnPtr> TaFunctions::is_retention_user_in_date_collect(FunctionConte
         Slice return_date = return_viewer.value(row_num);
         std::map<int, std::vector<DateValue>> init_dates;
         if (init.size == 0 || return_date.size == 0) {
+            res.append(false);
             continue ;
         }
         size_t offset = 0;
         size_t size;
         std::memcpy(&size, init.data + offset, sizeof(size_t));
         if (size == 0) {
+            res.append(false);
             continue ;
         }
         offset += sizeof(size_t);
@@ -849,6 +851,115 @@ StatusOr<ColumnPtr> TaFunctions::is_retention_user_in_date_collect(FunctionConte
     }
     return res.build(ColumnHelper::is_all_const(columns));
 }
+
+bool is_slice_none_more_case(bool slice_is_more, DatumArray slice_events, DatumArray current_event) {
+    if (slice_is_more) {
+        return false;
+    }
+    for (int i = 0; i < slice_events.size(); i++) {
+        auto event = slice_events[i].get_array();
+        if (event.size() != current_event.size()) {
+            continue;
+        }
+        for (int j = 0; j < event.size(); j++) {
+            if (event[j].get_slice() != current_event[j].get_slice()){
+                break;
+            }
+            if (j == event.size() - 1) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool is_slice_more_case(bool slice_is_more, DatumArray slice_events, DatumArray current_event) {
+    if (!slice_is_more) {
+        return false;
+    }
+    for (int i = 0; i < slice_events.size(); i++) {
+        auto event = slice_events[i].get_array();
+        if (event.size() != current_event.size()) {
+            continue;
+        }
+        for (int j = 0; j < event.size(); j++) {
+            if (event[j].get_slice() != current_event[j].get_slice()){
+                break;
+            }
+            if (j == event.size() - 1) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+StatusOr<ColumnPtr> TaFunctions::is_match_event_session_pattern(FunctionContext* context, const Columns& columns) {
+    ColumnBuilder<TYPE_BOOLEAN> res(columns[0]->size());
+
+    ColumnPtr column = context->get_constant_column(1);
+    int session_level =  ColumnHelper::get_const_value<TYPE_INT>(column);
+    ColumnPtr column1 = context->get_constant_column(2);
+    bool slice_is_more = ColumnHelper::get_const_value<TYPE_BOOLEAN>(column1);
+    ColumnPtr column3 = context->get_constant_column(4);
+    int type = ColumnHelper::get_const_value<TYPE_INT>(column3);
+    ColumnPtr column4 = context->get_constant_column(5);
+    bool next_slice_is_more = ColumnHelper::get_const_value<TYPE_BOOLEAN>(column4);
+
+    auto event_array = ColumnHelper::get_data_column(columns[3].get())->get(0).get_array();
+    auto next_event_array = columns[6]->get(0);
+
+    auto* outer_array = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(columns[0].get()));
+
+    for (int row_num = 0; row_num < columns[0]->size(); row_num++) {
+        auto sessions = outer_array->get(row_num).get_array();
+        bool match = false;
+        for (int i = 0; i < sessions.size(); i++) {
+            auto session_array = sessions[i].get_array();
+            if (session_array.size() < session_level + 1) {
+                continue;
+            }
+            auto current_event = session_array[session_level].get_array();
+            if (is_slice_none_more_case(slice_is_more, event_array, current_event) ||
+                is_slice_more_case(slice_is_more, event_array, current_event)) {
+                switch (type) {
+                case 1:
+                    match = true;
+                    break;
+                case 2:
+                    match = session_array.size() > session_level + 1;
+                    break;
+                case 3:
+                    match = session_array.size() == session_level + 1;
+                    break;
+                case 4: {
+                    if (session_array.size() == session_level + 1 || next_event_array.is_null()) {
+                        match = false;
+                        break;
+                    }
+                    auto next_event = session_array[session_level + 1].get_array();
+                    if (is_slice_none_more_case(next_slice_is_more, next_event_array.get_array(), next_event)) {
+                        match = true;
+                    } else {
+                        match = is_slice_more_case(next_slice_is_more, next_event_array.get_array(), next_event);
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+            if (match) {
+                break;
+            }
+        }
+        res.append(match);
+    }
+    auto result = res.build(ColumnHelper::is_all_const(columns));
+    return res.build(ColumnHelper::is_all_const(columns));
+}
+
+
 
 const std::map<Slice, TaFunctions::RangeType> TaFunctions::sliceToRangeType = {
     {"last_days", TaFunctions::RangeType::LAST_DAYS},

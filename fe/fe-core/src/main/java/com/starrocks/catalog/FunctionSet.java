@@ -1233,7 +1233,7 @@ public class FunctionSet {
         ArrayType res = new ArrayType(new ArrayType(new ArrayType(Type.VARCHAR)));
         addBuiltin(AggregateFunction.createBuiltin(BUILD_USER_EVENT_SESSION,
                 Lists.newArrayList(Type.INT, Type.DATETIME, Type.VARCHAR, Type.INT,
-                Type.INT, Type.BIGINT), res, Type.VARBINARY, false, false, false));
+                Type.TINYINT, Type.BIGINT), res, Type.VARBINARY, false, false, false));
 
 
         // Type.DATE must before Type.DATATIME, because DATE could be considered as DATETIME.

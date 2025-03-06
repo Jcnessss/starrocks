@@ -50,6 +50,7 @@ public:
     DEFINE_VECTORIZED_FN(funnel_max_step_date);
 
     DEFINE_VECTORIZED_FN(is_retention_user_in_date_collect);
+    DEFINE_VECTORIZED_FN(is_match_event_session_pattern);
 
     static int64_t microsToMillis(int64_t micros) {
         return std::floor(micros / 1000);

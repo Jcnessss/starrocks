@@ -159,6 +159,10 @@ public abstract class Type implements Cloneable {
 
     public static final Type MAP_VARCHAR_VARCHAR = new MapType(Type.VARCHAR, Type.VARCHAR);
 
+    public static final Type ARRAY_ARRAY_VARCHAR = new ArrayType(new ArrayType(Type.VARCHAR));
+
+    public static final Type ARRAY_ARRAY_ARRAY_VARCHAR = new ArrayType(new ArrayType(new ArrayType(Type.VARCHAR)));
+
     public static final ImmutableList<ScalarType> INTEGER_TYPES =
             ImmutableList.of(BOOLEAN, TINYINT, SMALLINT, INT, BIGINT, LARGEINT);
 

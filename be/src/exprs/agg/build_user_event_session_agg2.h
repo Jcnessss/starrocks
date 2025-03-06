@@ -37,23 +37,24 @@ struct EventEntity {
     int event_id;
     TimestampValue time;
     Slice attr;
+    bool is_init;
 };
 
 struct UserSessionState {
 
-    void init(int flag, int event_flag, int64_t interval) {
+    void init(int flag, int64_t interval) {
         time_interval_ms = interval;
         is_reverse = (flag & 0x10000) == 0x10000;
         max_length = flag & 0xffff;
-        init_event_flag = event_flag;
         _is_init = true;
     }
 
     void update(MemPool* mem_pool, const Int32Column* event_column, const TimestampColumn* time_column,
-                const BinaryColumn* attr_column, size_t row_num) {
+                const BinaryColumn* attr_column, const Int8Column* flag_column, size_t row_num) {
         EventEntity entity;
         entity.event_id = event_column->get_data()[row_num];
         entity.time = time_column->get_data()[row_num];
+        entity.is_init = flag_column->get_data()[row_num];
         Slice slice;
         if (attr_column->size() == 1) {
             slice = attr_column->get_data()[0];
@@ -69,7 +70,7 @@ struct UserSessionState {
             entity.attr = Slice(pos, slice.size);
         }
         data.emplace_back(entity);
-        size += 16 + slice.size;
+        size += 17 + slice.size;
     }
 
     void merge(MemPool* mem_pool, Slice& serialized) {
@@ -84,6 +85,8 @@ struct UserSessionState {
             v.set_timestamp(timestamp);
             entity.time = v;
             offset += sizeof(int64_t);
+            std::memcpy(&entity.is_init, serialized.data + offset, sizeof(bool));
+            offset += sizeof(bool);
             int length;
             std::memcpy(&length, serialized.data + offset, sizeof(int));
             offset += sizeof(int);
@@ -93,7 +96,7 @@ struct UserSessionState {
             entity.attr = Slice(pos, length);
             data.emplace_back(entity);
             offset += length;
-            size += 16 + length;
+            size += 17 + length;
         }
     }
 
@@ -150,7 +153,7 @@ struct UserSessionState {
                 last_time = entity.time;
                 continue ;
             }
-            if (entity.event_id == init_event_flag) {
+            if (entity.is_init) {
                 append_element(inner_array, entity);
                 if (middle_array->elements_column()->is_nullable()) {
                     down_cast<NullableColumn*>(middle_array->elements_column().get())->null_column()->append(0);
@@ -192,7 +195,6 @@ struct UserSessionState {
     int64_t time_interval_ms;
     bool is_reverse;
     int max_length;
-    int init_event_flag;
     bool _is_init = false;
 
     size_t size = 0;
@@ -203,15 +205,14 @@ struct UserSessionState {
 class UserSessionAggregateFunction final : public AggregateFunctionBatchHelper<UserSessionState, UserSessionAggregateFunction> {
 public:
 
-    void init_state_if_necessary(FunctionContext* ctx, AggDataPtr __restrict state) const {
+    void init_state_if_necessary(FunctionContext* ctx, AggDataPtr __restrict state, bool is_update) const {
         if (this->data(state)._is_init) {
             return;
         }
         int constant_num = ctx->get_num_constant_columns();
-        auto flag = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 3));
-        auto event_flag = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - 2));
+        auto flag = ColumnHelper::get_const_value<TYPE_INT>(ctx->get_constant_column(constant_num - (is_update ? 3 : 2)));
         auto interval = ColumnHelper::get_const_value<TYPE_BIGINT>(ctx->get_constant_column(constant_num - 1));
-        this->data(state).init(flag, event_flag, interval);
+        this->data(state).init(flag, interval);
     }
 
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
@@ -221,18 +222,19 @@ public:
             (columns[2]->is_nullable() && columns[2]->is_null(row_num)) || columns[2]->only_null()) {
             return;
         }
-        init_state_if_necessary(ctx, state);
+        init_state_if_necessary(ctx, state, true);
         auto* event_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(columns[0]));
         auto* time_column = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(columns[1]));
         auto* attr_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(columns[2]));
-        this->data(state).update(ctx->mem_pool(), event_column, time_column, attr_column, row_num);
+        auto* flag_column = down_cast<const Int8Column*>(ColumnHelper::get_data_column(columns[4]));
+        this->data(state).update(ctx->mem_pool(), event_column, time_column, attr_column, flag_column, row_num);
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
         if ((column->is_nullable() && column->is_null(row_num)) || column->only_null()) {
             return;
         }
-        init_state_if_necessary(ctx, state);
+        init_state_if_necessary(ctx, state, false);
         const auto* input_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(column));
         Slice serialized = input_column->get_slice(row_num);
         if (serialized.size == 0) {
@@ -259,6 +261,8 @@ public:
             offset += sizeof(int);
             std::memcpy(bytes.data() + offset, &entity.time._timestamp, sizeof(int64_t));
             offset += sizeof(int64_t);
+            std::memcpy(bytes.data() + offset, &entity.is_init, sizeof(bool));
+            offset += sizeof(bool);
             int length = entity.attr.size;
             std::memcpy(bytes.data() + offset, &length, sizeof(int));
             offset += sizeof(int);
@@ -281,6 +285,7 @@ public:
         auto* event_column = down_cast<const Int32Column*>(ColumnHelper::get_data_column(src[0].get()));
         auto* time_column = down_cast<const TimestampColumn*>(ColumnHelper::get_data_column(src[1].get()));
         auto* attr_column = down_cast<const BinaryColumn*>(ColumnHelper::get_data_column(src[2].get()));
+        auto* flag_column = down_cast<const Int8Column*>(ColumnHelper::get_data_column(src[4].get()));
         Bytes& bytes = column->get_bytes();
         size_t offset = bytes.size();
         size_t total_size = bytes.size();
@@ -290,9 +295,9 @@ public:
                 continue ;
             }
             if (attr_column->size() == 1) {
-                total_size += 16 + attr_column->get_slice(0).size;
+                total_size += 17 + attr_column->get_slice(0).size;
             } else {
-                total_size += 16 + attr_column->get_slice(i).size;
+                total_size += 17 + attr_column->get_slice(i).size;
             }
         }
         bytes.resize(total_size);
@@ -306,6 +311,8 @@ public:
             offset += sizeof(int);
             std::memcpy(bytes.data() + offset, &time_column->get_data()[i]._timestamp, sizeof(int64_t));
             offset += sizeof(int64_t);
+            std::memcpy(bytes.data() + offset, &flag_column->get_data()[i], sizeof(bool));
+            offset += sizeof(bool);
             Slice slice;
             if (attr_column->size() == 1) {
                 slice = attr_column->get_slice(0);
