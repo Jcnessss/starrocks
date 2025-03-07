@@ -108,8 +108,7 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         }
         ColumnSchema column = schema.getColumn(columnName);
         Type targetType = ColumnTypeConverter.fromKuduType(column);
-        Optional<ConstantOperator> casted = ((ConstantOperator) (operator.getChild(1))).castTo(targetType);
-        Object literal = getLiteral(casted.isPresent() ? casted.get() : operator.getChild(1));
+        Object literal = getLiteral(operator.getChild(1), targetType);
         if (literal == null) {
             return Lists.newArrayList();
         }
@@ -145,13 +144,10 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         }
         ColumnSchema column = schema.getColumn(columnName);
         Type targetType = ColumnTypeConverter.fromKuduType(column);
-
         List<ScalarOperator> valuesOperatorList = operator.getListChildren();
-        List<Optional<ConstantOperator>> casted =
-                valuesOperatorList.stream().map(x ->  ((ConstantOperator) x).castTo(targetType)).collect(Collectors.toList());
         List<Object> literalValues = new ArrayList<>(valuesOperatorList.size());
-        for (int i = 0; i < casted.size(); i++) {
-            Object literal = getLiteral(casted.get(i).isPresent() ? casted.get(i).get() : valuesOperatorList.get(i));
+        for (ScalarOperator valueOperator : valuesOperatorList) {
+            Object literal = getLiteral(valueOperator, targetType);
             if (literal == null) {
                 return Lists.newArrayList();
             }
@@ -165,11 +161,18 @@ public class KuduPredicateConverter extends ScalarOperatorVisitor<List<KuduPredi
         return Lists.newArrayList();
     }
 
-    private Object getLiteral(ScalarOperator operator) {
+    private Object getLiteral(ScalarOperator operator, Type targetType) {
         if (!(operator instanceof ConstantOperator)) {
             return null;
         }
+
         ConstantOperator constValue = (ConstantOperator) operator;
+        Optional<ConstantOperator> casted = constValue.castTo(targetType);
+        if (!casted.isPresent()) {
+            // Illegal cast. Do not push down the predicate.
+            return null;
+        }
+        constValue = casted.get();
         switch (constValue.getType().getPrimitiveType()) {
             case BOOLEAN:
                 return constValue.getBoolean();
