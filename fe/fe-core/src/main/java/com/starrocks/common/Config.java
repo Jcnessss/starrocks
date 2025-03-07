@@ -3337,4 +3337,11 @@ public class Config extends ConfigBase {
     // whether to skip list partition file for stats
     @ConfField(mutable = true)
     public static boolean enable_part_stats_only_hms = false;
+
+    // iceberg zk lock config
+    @ConfField(mutable = true)
+    public static String iceberg_zookeeper_connection_string = null;
+
+    @ConfField(mutable = true)
+    public static int iceberg_zookeeper_lock_semaphore_permits = 4;
 }

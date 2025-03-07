@@ -52,6 +52,8 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.cost.IcebergMetricsReporter;
 import com.starrocks.connector.iceberg.cost.IcebergStatisticProvider;
 import com.starrocks.connector.iceberg.io.IcebergCachingFileIO;
+import com.starrocks.connector.iceberg.lock.IcebergTableLock;
+import com.starrocks.connector.iceberg.lock.Locker;
 import com.starrocks.connector.share.iceberg.SerializableTable;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.qe.ConnectContext;
@@ -176,6 +178,7 @@ public class IcebergMetadata implements ConnectorMetadata {
     private final ExecutorService refreshOtherFeExecutor;
     private final IcebergMetricsReporter metricsReporter;
     private final IcebergCatalogProperties catalogProperties;
+    private IcebergTableLock icebergTableLocks;
 
     public IcebergMetadata(String catalogName, HdfsEnvironment hdfsEnvironment, IcebergCatalog icebergCatalog,
                            ExecutorService jobPlanningExecutor, ExecutorService refreshOtherFeExecutor,
@@ -1016,9 +1019,12 @@ public class IcebergMetadata implements ConnectorMetadata {
         }
 
         try {
-            batchWrite.commit();
-            transaction.commitTransaction();
-            asyncRefreshOthersFeMetadataCache(dbName, tableName);
+            Locker locker = icebergTableLocks.obtain(nativeTbl);
+            locker.withLock(() -> {
+                batchWrite.commit();
+                transaction.commitTransaction();
+                asyncRefreshOthersFeMetadataCache(dbName, tableName);
+            });
         } catch (Exception e) {
             List<String> toDeleteFiles = dataFiles.stream()
                     .map(TIcebergDataFile::getPath)
@@ -1367,12 +1373,15 @@ public class IcebergMetadata implements ConnectorMetadata {
         }
 
         try {
-            Snapshot snapshot = requireNonNull(
-                    nativeTbl.snapshot(icebergHandle.getSnapshotId()), "snapshot is null");
-            batchWrite.validateFromSnapshot(snapshot.snapshotId());
-            batchWrite.commit();
-            transaction.commitTransaction();
-            asyncRefreshOthersFeMetadataCache(dbName, tableName);
+            Locker locker = icebergTableLocks.obtain(nativeTbl);
+            locker.withLock(() -> {
+                Snapshot snapshot = requireNonNull(
+                        nativeTbl.snapshot(icebergHandle.getSnapshotId()), "snapshot is null");
+                batchWrite.validateFromSnapshot(snapshot.snapshotId());
+                batchWrite.commit();
+                transaction.commitTransaction();
+                asyncRefreshOthersFeMetadataCache(dbName, tableName);
+            });
         } catch (Exception e) {
             List<String> toDeleteFiles = dataFiles.stream()
                     .map(TIcebergDataFile::getPath)
@@ -1383,5 +1392,10 @@ public class IcebergMetadata implements ConnectorMetadata {
         } finally {
             icebergCatalog.invalidateCacheWithoutTable(new CachingIcebergCatalog.IcebergTableName(dbName, tableName));
         }
+    }
+
+    public IcebergMetadata setIcebergTableLocks(IcebergTableLock icebergTableLocks) {
+        this.icebergTableLocks = icebergTableLocks;
+        return this;
     }
 }

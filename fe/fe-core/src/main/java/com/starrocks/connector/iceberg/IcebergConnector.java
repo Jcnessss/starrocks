@@ -24,6 +24,7 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.glue.IcebergGlueCatalog;
 import com.starrocks.connector.iceberg.hadoop.IcebergHadoopCatalog;
 import com.starrocks.connector.iceberg.hive.IcebergHiveCatalog;
+import com.starrocks.connector.iceberg.lock.IcebergTableLock;
 import com.starrocks.connector.iceberg.rest.IcebergRESTCatalog;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudConfigurationFactory;
@@ -35,6 +36,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 
@@ -51,6 +53,7 @@ public class IcebergConnector implements Connector {
     private ExecutorService icebergJobPlanningExecutor;
     private ExecutorService refreshOtherFeExecutor;
     private final IcebergCatalogProperties icebergCatalogProperties;
+    private volatile IcebergTableLock icebergTableLock;
 
     public IcebergConnector(ConnectorContext context) {
         this.catalogName = context.getCatalogName();
@@ -87,7 +90,8 @@ public class IcebergConnector implements Connector {
     @Override
     public ConnectorMetadata getMetadata() {
         return new IcebergMetadata(catalogName, hdfsEnvironment, getNativeCatalog(),
-                buildIcebergJobPlanningExecutor(), buildRefreshOtherFeExecutor(), icebergCatalogProperties);
+                buildIcebergJobPlanningExecutor(), buildRefreshOtherFeExecutor(), icebergCatalogProperties)
+                .setIcebergTableLocks(buildIcebergTableLock());
     }
 
     // In order to be compatible with the catalog created with the wrong configuration,
@@ -153,5 +157,17 @@ public class IcebergConnector implements Connector {
     @Override
     public List<Pair<List<Object>, Long>> getSamples() {
         return icebergNativeCatalog.getSamples();
+    }
+
+    private IcebergTableLock buildIcebergTableLock() {
+        if (icebergTableLock == null) {
+            synchronized (this) {
+                if (icebergTableLock == null) {
+                    Optional<String> connectString = Optional.ofNullable(Config.iceberg_zookeeper_connection_string);
+                    icebergTableLock = new IcebergTableLock(connectString, Config.iceberg_zookeeper_lock_semaphore_permits);
+                }
+            }
+        }
+        return icebergTableLock;
     }
 }
