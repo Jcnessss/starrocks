@@ -20,6 +20,7 @@ import com.starrocks.catalog.ResourceGroupClassifier;
 import com.starrocks.sql.analyzer.ResourceGroupAnalyzer;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.parser.NodePosition;
+import com.starrocks.system.BackendResourceStat;
 import com.starrocks.thrift.TWorkGroupType;
 
 import java.util.ArrayList;
@@ -93,8 +94,10 @@ public class CreateResourceGroupStmt extends DdlStmt {
                 (resourceGroup.getExclusiveCpuCores() != null && resourceGroup.getExclusiveCpuCores() > 0)) {
             throw new SemanticException(SHORT_QUERY_SET_EXCLUSIVE_CPU_CORES_ERR_MSG);
         }
-
-        ResourceGroup.validateCpuParameters(resourceGroup.getRawCpuWeight(), resourceGroup.getExclusiveCpuCores());
+        if (resourceGroup.getRawCpuWeight() == null) {
+            int avgCore = BackendResourceStat.getInstance().getAvgNumHardwareCoresOfBe();
+            resourceGroup.setCpuWeight(avgCore);
+        }
     }
 
     public ResourceGroup getResourceGroup() {
