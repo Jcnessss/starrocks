@@ -22,6 +22,7 @@ import com.starrocks.connector.metastore.IMetastore;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 
 public interface IHiveMetastore extends IMetastore {
@@ -107,5 +108,7 @@ public interface IHiveMetastore extends IMetastore {
 
     void alterTable(String dbName, String tableName, org.apache.hadoop.hive.metastore.api.Table newTable);
 
-    public Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues);
+    Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues);
+
+    OptionalLong getPartitionListVersion(String databaseName, String tableName);
 }

@@ -297,6 +297,13 @@ public class HiveMetaClient {
         }
     }
 
+    public long getPartitionListVersion(String databaseName, String tableName) {
+        try (Timer ignored = Tracers.watchScope(EXTERNAL, "HMS.getPartitionsVersion")) {
+            return callRPC("getPartitionListVersion", String.format("Failed to get versions"),
+                    databaseName, tableName);
+        }
+    }
+
     /**
      * Both 'getPartitionsByNames' and 'getPartitionColumnStatistics' could throw exception or no response
      * when querying too many partitions at present. Due to statistics don't affect accuracy, user could adjust

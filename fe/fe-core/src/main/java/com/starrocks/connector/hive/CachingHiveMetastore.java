@@ -47,6 +47,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -70,7 +71,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     private final Map<DatabaseTableName, Long> lastAccessTimeMap;
 
     // eg: HivePartitionValue -> List("year=2022/month=10", "year=2022/month=11")
-    protected LoadingCache<HivePartitionValue, List<String>> partitionKeysCache;
+    protected LoadingCache<HivePartitionValue, HivePartitionNames> partitionKeysCache;
 
     // eg: "year=2022/month=10" -> Partition
     protected LoadingCache<HivePartitionName, Partition> partitionCache;
@@ -224,15 +225,25 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         lastAccessTimeMap.put(databaseTableName, System.currentTimeMillis());
         // first check if the all partition keys are cached
         HivePartitionValue allPartitionValue = HivePartitionValue.of(databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
+        OptionalLong version = metastore.getPartitionListVersion(databaseTableName.getDatabaseName(),
+                databaseTableName.getTableName());
         if (partitionKeysCache.asMap().containsKey(allPartitionValue)) {
-            List<String> allPartitionNames = get(partitionKeysCache, allPartitionValue);
-            if (partitionValues.stream().noneMatch(Optional::isPresent)) {
-                // no need to filter partition names by values
-                return allPartitionNames;
+
+            HivePartitionNames allPartitionNames = get(partitionKeysCache, allPartitionValue);
+            if (!isStale(allPartitionNames.getVersion(), version)) {
+                if (partitionValues.stream().noneMatch(Optional::isPresent)) {
+                    // no need to filter partition names by values
+                    return allPartitionNames.getPartitionNames();
+                }
+                return PartitionUtil.getFilteredPartitionKeys(allPartitionNames.getPartitionNames(), partitionValues);
             }
-            return PartitionUtil.getFilteredPartitionKeys(allPartitionNames, partitionValues);
         }
-        return get(partitionKeysCache, hivePartitionValue);
+        HivePartitionNames hivePartitionNames = getIfPresent(partitionKeysCache, hivePartitionValue);
+        if (hivePartitionNames == null || isStale(hivePartitionNames.getVersion(), version)) {
+            partitionKeysCache.invalidate(hivePartitionValue);
+            return get(partitionKeysCache, hivePartitionValue).getPartitionNames();
+        }
+        return hivePartitionNames.getPartitionNames();
     }
 
     @Override
@@ -240,9 +251,14 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         return metastore.partitionExists(table, partitionValues);
     }
 
-    private List<String> loadPartitionKeys(HivePartitionValue hivePartitionValue) {
-        return metastore.getPartitionKeysByValue(hivePartitionValue.getHiveTableName().getDatabaseName(),
-                hivePartitionValue.getHiveTableName().getTableName(), hivePartitionValue.getPartitionValues());
+    private HivePartitionNames loadPartitionKeys(HivePartitionValue hivePartitionValue) {
+        DatabaseTableName databaseTableName = hivePartitionValue.getHiveTableName();
+        OptionalLong version = metastore.getPartitionListVersion(databaseTableName.getDatabaseName(),
+                databaseTableName.getTableName());
+        List<String> names = metastore.getPartitionKeysByValue(databaseTableName.getDatabaseName(),
+                databaseTableName.getTableName(), hivePartitionValue.getPartitionValues());
+        return new HivePartitionNames(databaseTableName.getDatabaseName(),
+                databaseTableName.getTableName(), names, version);
     }
 
     public Database getDb(String dbName) {
@@ -487,10 +503,13 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         tableCache.put(databaseTableName, updatedTable);
 
         // refresh table need to refresh partitionKeysCache with all partition values
+        OptionalLong version = metastore.getPartitionListVersion(databaseTableName.getDatabaseName(),
+                databaseTableName.getTableName());
         HivePartitionValue hivePartitionValue = HivePartitionValue.of(databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
-        List<String> updatedPartitionKeys = loadPartitionKeys(hivePartitionValue);
+        HivePartitionNames hivePartitionNames = loadPartitionKeys(hivePartitionValue);
+        List<String> updatedPartitionKeys = hivePartitionNames.getPartitionNames();
         if (enableListNameCache) {
-            partitionKeysCache.put(hivePartitionValue, updatedPartitionKeys);
+            partitionKeysCache.put(hivePartitionValue, hivePartitionNames);
         }
 
         HiveMetaStoreTable hmsTable = (HiveMetaStoreTable) updatedTable;
@@ -597,6 +616,8 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                 HivePartitionName firstName = partitionNames.get(0);
                 DatabaseTableName databaseTableName = DatabaseTableName.of(firstName.getDatabaseName(), firstName.getTableName());
                 // refresh partitionKeysCache with all partition values
+                OptionalLong version = metastore.getPartitionListVersion(databaseTableName.getDatabaseName(),
+                        databaseTableName.getTableName());
                 HivePartitionValue hivePartitionValue = HivePartitionValue.of(
                         databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
                 partitionKeysCache.put(hivePartitionValue, loadPartitionKeys(hivePartitionValue));
@@ -760,5 +781,20 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     @Override
     public Map<String, Long> getPartitionsVersion(String dbName, String tableName, List<String> partitionValues) {
         return metastore.getPartitionsVersion(dbName, tableName, partitionValues);
+    }
+
+    @Override
+    public OptionalLong getPartitionListVersion(String databaseName, String tableName) {
+        return metastore.getPartitionListVersion(databaseName, tableName);
+    }
+
+    private static <V> boolean isStale(OptionalLong cacheVersion, OptionalLong remoteVersion) {
+        if (cacheVersion.isPresent()) {
+            // present -> new version or empty
+            return !cacheVersion.equals(remoteVersion);
+        } else {
+            // empty -> present
+            return remoteVersion.isPresent();
+        }
     }
 }

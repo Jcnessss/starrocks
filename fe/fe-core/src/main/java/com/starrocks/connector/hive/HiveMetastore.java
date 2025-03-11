@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -374,4 +375,8 @@ public class HiveMetastore implements IHiveMetastore {
         return client.getPartitionsVersion(dbName, tableName, partitionValues);
     }
 
+    @Override
+    public OptionalLong getPartitionListVersion(String databaseName, String tableName) {
+        return OptionalLong.of(client.getPartitionListVersion(databaseName, tableName));
+    }
 }

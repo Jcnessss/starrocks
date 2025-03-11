@@ -93,6 +93,16 @@ public abstract class CachingMetastore {
         }
     }
 
+    protected static <K, V> V getIfPresent(LoadingCache<K, V> cache, K key) {
+        try {
+            return cache.getIfPresent(key);
+        } catch (UncheckedExecutionException e) {
+            LOG.error("Error occurred when loading cache", e);
+            throwIfInstanceOf(e.getCause(), StarRocksConnectorException.class);
+            throw e;
+        }
+    }
+
     public boolean isTablePresent(DatabaseTableName tableName) {
         return tableCache.getIfPresent(tableName) != null;
     }
