@@ -98,7 +98,7 @@ public class ResourceGroup {
                     (rg, classifier) -> "" + rg.getNormalizedExclusiveCpuCores()),
             new ColumnMeta(
                     new Column(MEM_LIMIT, ScalarType.createVarchar(200)),
-                    (rg, classifier) -> (rg.getMemLimit() * 100) + "%"),
+                    (rg, classifier) -> (rg.getMemLimit() == null ? 100 : rg.getMemLimit() * 100) + "%"),
             new ColumnMeta(
                     new Column(MAX_CPU_CORES, ScalarType.createVarchar(200)),
                     (rg, classifier) -> "" + rg.getMaxCpuCores(), false),
@@ -113,7 +113,7 @@ public class ResourceGroup {
                     (rg, classifier) -> "" + Objects.requireNonNullElse(rg.getBigQueryMemLimit(), 0)),
             new ColumnMeta(
                     new Column(CONCURRENCY_LIMIT, ScalarType.createVarchar(200)),
-                    (rg, classifier) -> "" + rg.getConcurrencyLimit()),
+                    (rg, classifier) -> rg.getConcurrencyLimit() == null ? String.valueOf(-1) : "" + rg.getConcurrencyLimit()),
             new ColumnMeta(
                     new Column(SPILL_MEM_LIMIT_THRESHOLD, ScalarType.createVarchar(200)),
                     (rg, classifier) -> new DecimalFormat("#.##").format(
@@ -179,8 +179,6 @@ public class ResourceGroup {
     private List<String> showClassifier(ResourceGroupClassifier classifier, boolean verbose) {
         return COLUMN_METAS.stream()
                 .filter(meta -> verbose || meta.visible)
-                .filter(meta -> !meta.column.nameEquals(CPU_WEIGHT, false) &&
-                        !meta.column.nameEquals(MEM_LIMIT, false))
                 .map(meta -> meta.valueSupplier.apply(this, classifier))
                 .collect(Collectors.toList());
     }
