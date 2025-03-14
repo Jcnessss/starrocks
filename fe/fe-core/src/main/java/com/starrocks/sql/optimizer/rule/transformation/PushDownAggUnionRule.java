@@ -21,9 +21,11 @@ import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.Operator;
+import com.starrocks.sql.optimizer.operator.OperatorBuilderFactory;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.Projection;
 import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalUnionOperator;
 import com.starrocks.sql.optimizer.operator.pattern.Pattern;
 import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
@@ -39,6 +41,24 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.starrocks.sql.optimizer.operator.AggType.LOCAL;
+
+// Before:
+//      Global Aggregate
+//            |
+//      Local Aggregate
+//            |
+//          Union
+//         /     \
+//      Leaf     Leaf
+// After:
+//      Global Aggregate
+//             |
+//           Union
+//        /         \
+//   Local Agg    Local Agg
+//       |            |
+//     Leaf          Leaf
+
 
 public class PushDownAggUnionRule extends TransformationRule {
 
@@ -67,13 +87,13 @@ public class PushDownAggUnionRule extends TransformationRule {
 
     @Override
     public List<OptExpression> transform(OptExpression input, OptimizerContext context) {
-        LogicalAggregationOperator agg = (LogicalAggregationOperator) input.getOp();
+        LogicalAggregationOperator originAgg = (LogicalAggregationOperator) input.getOp();
         LogicalUnionOperator union = (LogicalUnionOperator) input.inputAt(0).getOp();
-        List<OptExpression> aggs = new ArrayList<>();
+        List<OptExpression> newAggs = new ArrayList<>();
         List<List<ColumnRefOperator>> unionInputs = new ArrayList<>();
         List<OptExpression> leaves = new ArrayList<>();
 
-        // Refactor leaf nodes, push down the projection of union operator.
+        // Refactor leaf nodes, push down the projection of union operator to the leaves.
         if (union.getProjection() != null) {
             for (int i = 0; i < union.getChildOutputColumns().size(); i++) {
                 int finalIndex = i;
@@ -123,9 +143,12 @@ public class PushDownAggUnionRule extends TransformationRule {
                 Projection newProject = new Projection(newColumnRefMap, newCommonSubOperatorMap,
                         tempProject.needReuseLambdaDependentExpr());
 
-                child.setProjection(newProject);
-                child.getRowOutputInfo(null);
-                leaves.add(new OptExpression(child));
+                LogicalOperator.Builder builder = OperatorBuilderFactory.build(child);
+                builder.withOperator(child);
+                builder.setProjection(newProject);
+                Operator clonedChild = builder.build();
+                clonedChild.getRowOutputInfo(null);
+                leaves.add(new OptExpression(clonedChild));
             }
         }
 
@@ -152,7 +175,7 @@ public class PushDownAggUnionRule extends TransformationRule {
                 }
             };
             Map<ColumnRefOperator, CallOperator> newAggMap = new HashMap<>();
-            for (Map.Entry<ColumnRefOperator, CallOperator> entry : agg.getAggregations().entrySet()) {
+            for (Map.Entry<ColumnRefOperator, CallOperator> entry : originAgg.getAggregations().entrySet()) {
                 CallOperator newFn = (CallOperator) entry.getValue().clone();
                 for (int index = 0; index < entry.getValue().getArguments().size(); index++) {
                     ScalarOperator argument = entry.getValue().getArguments().get(index);
@@ -164,15 +187,15 @@ public class PushDownAggUnionRule extends TransformationRule {
                 }
                 newAggMap.put(entry.getKey(), newFn);
             }
-            List<ColumnRefOperator> newGroupByKeys = new ArrayList<>(agg.getGroupingKeys().size());
-            for (ColumnRefOperator groupByKey : agg.getGroupingKeys()) {
+            List<ColumnRefOperator> newGroupByKeys = new ArrayList<>(originAgg.getGroupingKeys().size());
+            for (ColumnRefOperator groupByKey : originAgg.getGroupingKeys()) {
                 newGroupByKeys.add((ColumnRefOperator) groupByKey.accept(visitor, null));
             }
-            List<ColumnRefOperator> newPartitionKeys = new ArrayList<>(agg.getPartitionByColumns().size());
-            for (ColumnRefOperator partitionKey : agg.getPartitionByColumns()) {
+            List<ColumnRefOperator> newPartitionKeys = new ArrayList<>(originAgg.getPartitionByColumns().size());
+            for (ColumnRefOperator partitionKey : originAgg.getPartitionByColumns()) {
                 newPartitionKeys.add((ColumnRefOperator) partitionKey.accept(visitor, null));
             }
-            LogicalAggregationOperator newAgg = new LogicalAggregationOperator.Builder().withOperator(agg)
+            LogicalAggregationOperator newAgg = new LogicalAggregationOperator.Builder().withOperator(originAgg)
                     .setGroupingKeys(newGroupByKeys)
                     .setPartitionByColumns(newPartitionKeys)
                     .setAggregations(createNormalAgg(newAggMap))
@@ -188,23 +211,23 @@ public class PushDownAggUnionRule extends TransformationRule {
                 newAggExpr = OptExpression.create(newAgg, input.inputAt(0).inputAt(i));
             }
 
-            aggs.add(newAggExpr);
+            newAggs.add(newAggExpr);
 
             ColumnRefSet columns = new ColumnRefSet();
             columns.union(newAgg.getGroupingKeys());
-            columns.union(new ArrayList<>(agg.getAggregations().keySet()));
+            columns.union(new ArrayList<>(originAgg.getAggregations().keySet()));
 
             unionInputs.add(columns.getColumnRefOperators(context.getColumnRefFactory()));
         }
 
-        List<ColumnRefOperator> aggOutput = agg.getOutputColumns(null).getColumnRefOperators(context.getColumnRefFactory());
+        List<ColumnRefOperator> aggOutput = originAgg.getOutputColumns(null).getColumnRefOperators(context.getColumnRefFactory());
         for (int i = 0; i < aggOutput.size(); i++) {
-            if (agg.getAggregations().containsKey(aggOutput.get(i))) {
-                aggOutput.get(i).setType(agg.getAggregations().get(aggOutput.get(i)).getType());
+            if (originAgg.getAggregations().containsKey(aggOutput.get(i))) {
+                aggOutput.get(i).setType(originAgg.getAggregations().get(aggOutput.get(i)).getType());
             }
         }
         LogicalUnionOperator newUnion = new LogicalUnionOperator(aggOutput, unionInputs, union.isUnionAll());
-        return Lists.newArrayList(OptExpression.create(newUnion, aggs));
+        return Lists.newArrayList(OptExpression.create(newUnion, newAggs));
     }
 
     public Map<ColumnRefOperator, CallOperator> createNormalAgg(Map<ColumnRefOperator, CallOperator> aggregationMap) {
